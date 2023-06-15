@@ -1,0 +1,177 @@
+import elabapy
+# json is used for encoding and decoding JSON data.
+import json
+# imports the HTTPError exception from the requests library, which is used to handle errors that occur
+# during HTTP requests.
+from requests.exceptions import HTTPError
+from tkinter import *
+from tkinter import filedialog
+import datetime
+import customtkinter
+
+
+customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
+customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
+
+
+root = Tk()
+# creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
+# old key: 9478088ecd011a7dcbf3b4a175373557455d0128d171a8d645799c21ce5307f01b8674708edd7ef9d226209
+manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="24aca0cab9f8efac63e49ae7a217ee845161e760ccecdfa64fe5d255d62769370639260bb681d343e1a12")
+
+
+root.geometry("325x400")
+root.title("Create Experiment")
+
+"""
+GUI OBJECTS
+"""
+###########################################################################################
+
+folderLabel = Label(root, text="Files:")
+folderLabel.grid(row=3, column=0, padx=10, pady=10, sticky=W)
+folderText_field = Entry(root)
+folderText_field.grid(row=3, column=1, padx=10, pady=10)
+
+
+
+titleLabel = Label(root, text="Title:")
+titleLabel.grid(row=0, column=0, padx=10, pady=10, sticky=W)
+titleText_field = Entry(root)
+titleText_field.grid(row=0, column=1, padx=10, pady=10)
+
+
+# sticky=w nach links positionieren
+tagLabel = Label(root, text="Tags:")
+tagLabel.grid(row=1, column=0, padx=10, pady=10, sticky=W)
+tagText_field = Entry(root)
+tagText_field.grid(row=1, column=1, padx=10, pady=10)
+
+###########################################################################################
+
+def get_current_date():
+    return datetime.date.today().strftime('%Y-%m-%d')
+
+
+
+
+def createJsonFile():
+
+    data = {
+        'Title': titleText_field.get(),
+        'Tags': tagText_field.get(),
+        'Kraftmessung1.tdms': {
+            'Folder': '',
+            'Creator (ID: 2)': titleText_field.get(),
+            'Identifier (ID: 1)': '',
+            'Software': 'VNWA3',
+            'Software Version': 'VNWA36.6 (2015)',
+            'Description (ID: 17)': 'Vector Network Analyzer Measurments of a Piezoelectric',
+            'Date (ID: 8)': get_current_date(),
+            'Subject (ID: 6)': 'Generator',
+            'Title':  titleText_field.get(),
+            'Publisher (ID: 4)': '',
+            'PublicationYear (ID: 5)': '',
+            'ResourceType (ID: 10)': 'Measurement',
+            'Contribter (ID: 7)': '',
+            'RelatedIdentifier (ID: 12)': '',
+            'GeoLocation (ID: 18)': 'Bremen, Germany',
+            'Language (ID: 7)': 'English'
+        },
+        'Kraftmessung2.tdms': {
+            'Folder': '',
+            'Creator (ID: 2)': titleText_field.get(),
+            'Identifier (ID: 1)': '',
+            'Software': 'VNWA3',
+            'Software Version': 'VNWA36.6 (2015)',
+            'Description (ID: 17)': 'Vector Network Analyzer Measurments of a Piezoelectric',
+            'Date (ID: 8)': get_current_date(),
+            'Subject (ID: 6)': 'Generator',
+            'Title': titleText_field.get(),
+            'Publisher (ID: 4)': '',
+            'PublicationYear (ID: 5)': '',
+            'ResourceType (ID: 10)': 'Measurement',
+            'Contribter (ID: 7)': '',
+            'RelatedIdentifier (ID: 12)': '',
+            'GeoLocation (ID: 18)': 'Bremen, Germany',
+            'Language (ID: 7)': 'English'
+        }
+    }
+
+    # Dateiname und Pfad für die JSON-Datei
+    filename = 'daten.json'
+    filepath = filename
+
+    with open(filepath, 'w') as outfile:
+        json.dump(data, outfile)
+
+    print(f"Die Datei {filename} wurde erfolgreich erstellt!")
+
+
+def uploadFile():
+    # use the filedialog module to open a file dialog box and allow the user to select a file to upload
+    file_paths = filedialog.askopenfilenames()
+
+    # update the folderText_field Entry widget with the path(s) to the selected file(s)
+    folderText_field.delete(0, END)
+    folderText_field.insert(0, ";".join(file_paths))
+
+
+# Create an experiment
+
+def create_Experiment(title, tag):
+
+    response = manager.create_experiment()
+    print(f"Created experiment with id {response['id']}")
+    myLabel = Label(root, text=f"Created experiment with id {response['id']}.")
+    myLabel.grid(row=5, column=1, padx=5, pady=5)
+
+    params = {"title": title}
+    print(manager.post_experiment(response['id'], params))
+
+    tags = tag.split(",")
+    for t in tags:
+        params = {"tag": t.strip()}
+        print(manager.add_tag_to_experiment(response['id'], params))
+    createJsonFile()
+
+    # upload the selected files to the experiment
+    exp_id = response['id']
+    file_paths = folderText_field.get().split(";")
+    for file_path in file_paths:
+        with open(file_path, 'rb') as f:
+            params = {'file': f}
+            manager.upload_to_experiment(exp_id, params)
+            print(f"Uploaded file '{file_path}' to experiment {exp_id}.")
+
+
+try:
+
+
+    myButton = Button(root, text="Create Experiment", command=lambda: create_Experiment(titleText_field.get(), tagText_field.get()))
+    myButton.grid(row=4, column=1, padx=10, pady=10)
+
+    myUploadButton = Button(root, text="Add File", command=uploadFile)
+    myUploadButton.grid(row=2, column=1, padx=10, pady=10)
+
+    # uses the json.dumps function to convert the exp variable (which contains information about an experiment)
+    # into a string representation in JSON format. The indent parameter is set to 4 to make the JSON output more
+    # readable, and the sort_keys parameter is set to True to sort the keys in the JSON output.
+    # print(json.dumps(exp, indent=4, sort_keys=True))
+
+    # Create a database item
+    # 1 stands for the ID of the category of the new item
+    # If you manually display the bar next to "create" in the database, you will see all categories
+    #response = manager.create_item(1)
+    #print(f"Created database item with id {response['id']}.")
+
+
+    # link database item 3449 to experiment 13296
+    #params = {"link": 3449, "targetEntity": "items"}
+    #print(manager.add_link_to_experiment(13296, params))
+
+    root.mainloop()
+
+# if something goes wrong, the corresponding HTTPError will be raised
+except HTTPError as e:
+    print(e)
