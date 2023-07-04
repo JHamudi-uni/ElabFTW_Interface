@@ -4,30 +4,6 @@ import json
 # imports the HTTPError exception from the requests library, which is used to handle errors that occur
 # during HTTP requests.
 from requests.exceptions import HTTPError
-
-
-
-# creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
-manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="1ddbf1d38905d0b8d48c8992783a50320d0103fb19c9079259b9defbeb4bc11447da883ac6facbff1152210")
-params = { "tag": "some-tag"}
-
-# get experiment with id 13170
-try:
-    exp = manager.get_experiment(13170)
-
-    # add tag "some-tag" to experiment 13170
-    print(manager.add_tag_to_experiment(13170, params))
-
-    # uses the json.dumps function to convert the exp variable (which contains information about an experiment)
-    # into a string representation in JSON format. The indent parameter is set to 4 to make the JSON output more
-    # readable, and the sort_keys parameter is set to True to sort the keys in the JSON output.
-    print(json.dumps(exp, indent=4, sort_keys=True))
-
-# if something goes wrong, the corresponding HTTPError will be raised
-except HTTPError as e:
-    print(e)
-    
-
 from tkinter import *
 from tkinter import filedialog
 import datetime
@@ -45,12 +21,12 @@ customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "gre
 #root = Tk()
 # creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
 # old key: 9478088ecd011a7dcbf3b4a175373557455d0128d171a8d645799c21ce5307f01b8674708edd7ef9d226209
-manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="c1cb0fc839abc10e446af485b615c4c5e22d180d4502109a3c1829395016186ddd9b39f56b2a4138e88b2")
+manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="f8952cd129314c3ea48de03476b09f917ecb0515ab9d4fe421e4825d43a6aa3176e1996fa6c2ff40e5b02")
 
 
 #root.geometry("325x400")
 #root.title("Create Experiment")
-
+hochgeladene_tdms_dateien = []
 
 # class App erbt von customkinter.CTk
 # self ist eine instanz vom Objekt
@@ -61,6 +37,7 @@ class GUI(customtkinter.CTk):
         super().__init__()
         self.metadata = {}
         global filename
+        #hochgeladene_tdms_dateien = []
 
 
         # configure window
@@ -128,6 +105,7 @@ class GUI(customtkinter.CTk):
         #root.mainloop()
 
 
+
         def change_appearance_mode_event(self, new_appearance_mode: str):
             customtkinter.set_appearance_mode(new_appearance_mode)
 
@@ -135,7 +113,7 @@ class GUI(customtkinter.CTk):
         def sidebar_create_event(self):
 
 
-            print("sidebar_button click")
+            print("sidebar_button Create click")
 
             #self.label = customtkinter.CTkLabel(self, text="Create")
             #self.label.grid(row=0, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
@@ -176,41 +154,30 @@ class GUI(customtkinter.CTk):
 
             def createJsonFile():
 
-                title_tdms_file = self.metadata.get("title", "N/A")
+                title_tdms_file = self.metadata.get("name", "N/A")
                 print(title_tdms_file)
                 description = self.metadata.get("description", "N/A")
+
+                #hochgeladene_tdms_dateien = ['/Users/muhamedjaber/PycharmProjects/APIv1/03_Kaltgas_316L-Al_07_vf_4000.tdms', '/Users/muhamedjaber/PycharmProjects/APIv1/03_Kaltgas_316L-Al_10_vf_4600.tdms']
 
                 data = {
                     'Title': self.titleText_field.get(),
                     'Tags': self.tagText_field.get(),
-                    'Kraftmessung1.tdms': {
+                }
+
+                # Verwende die Liste hochgeladene_tdms_dateien, um die Pfade der hochgeladenen TDMS-Dateien zu durchlaufen
+                for index, tdms_datei in enumerate(hochgeladene_tdms_dateien):
+                    abschnitt_name = f'Kraftmessung{index + 1}.tdms'
+                    abschnitt_daten = {
                         'Folder': '',
-                        'Creator (ID: 2)': self.titleText_field.get(),
+                        'Creator (ID: 2)': '',
                         'Identifier (ID: 1)': '',
                         'Software': 'VNWA3',
                         'Software Version': 'VNWA36.6 (2015)',
-                        'Description (ID: 17)': 'Vector Network Analyzer Measurments of a Piezoelectric',
+                        'Description (ID: 17)': description,
                         'Date (ID: 8)': get_current_date(),
                         'Subject (ID: 6)': 'Generator',
-                        'Title': title_tdms_file,
-                        'Publisher (ID: 4)': '',
-                        'PublicationYear (ID: 5)': '',
-                        'ResourceType (ID: 10)': 'Measurement',
-                        'Contribter (ID: 7)': '',
-                        'RelatedIdentifier (ID: 12)': '',
-                        'GeoLocation (ID: 18)': 'Bremen, Germany',
-                        'Language (ID: 7)': 'English'
-                    },
-                    'Kraftmessung2.tdms': {
-                        'Folder': '',
-                        'Creator (ID: 2)': self.titleText_field.get(),
-                        'Identifier (ID: 1)': '',
-                        'Software': 'VNWA3',
-                        'Software Version': 'VNWA36.6 (2015)',
-                        'Description (ID: 17)': 'Vector Network Analyzer Measurments of a Piezoelectric',
-                        'Date (ID: 8)': get_current_date(),
-                        'Subject (ID: 6)': 'Generator',
-                        'Title': '',
+                        'Title': tdms_datei,
                         'Publisher (ID: 4)': '',
                         'PublicationYear (ID: 5)': '',
                         'ResourceType (ID: 10)': 'Measurement',
@@ -219,20 +186,26 @@ class GUI(customtkinter.CTk):
                         'GeoLocation (ID: 18)': 'Bremen, Germany',
                         'Language (ID: 7)': 'English'
                     }
-                }
+                    # Das abschnitt_daten-Dictionary wird dem data-Dictionary hinzugefügt
+                    data[abschnitt_name] = abschnitt_daten
+
+                # Nachdem alle Abschnitte und Daten hinzugefügt wurden, wird das data-Dictionary in die Datei "daten.json" geschrieben.
+                with open('daten.json', 'w') as json_datei:
+                    json.dump(data, json_datei, indent=4)
+
 
                 # Dateiname und Pfad für die JSON-Datei
-                filename = 'daten.json'
-                filepath = filename
+                #filename = 'daten.json'
+                #filepath = filename
 
 
-                with open(filepath, 'w') as outfile:
-                    json.dump(data, outfile)
+                #with open(filepath, 'w') as outfile:
+                #    json.dump(data, outfile)
 
-                print(f"Die Datei {filename} wurde erfolgreich erstellt!")
+                #print(f"Die Datei {filename} wurde erfolgreich erstellt!")
+
 
             def uploadJsonFile(exp_id):
-                #print(filename)
                 daten_json_path = 'daten.json'
                 if os.path.exists(daten_json_path):
                     with open(daten_json_path, 'rb') as f:
@@ -252,6 +225,10 @@ class GUI(customtkinter.CTk):
 
 
             def upload_tdms_file():
+                # Durch das Hinzufügen der Zeile global hochgeladene_tdms_dateien wird die Variable als global
+                # markiert und alle Änderungen, die in der Funktion vorgenommen werden, wirken
+                # sich auf die globale Variable aus.
+
                 # filedialog ist ein Modul in Tkinter, das Funktionen für den Dateiauswahldialog bereitstellt.
                 # askopenfilename() ist eine Funktion des filedialog-Moduls. Sie öffnet den Dateiauswahldialog und
                 # gibt den ausgewählten Dateipfad zurück. Der Benutzer kann eine Datei auswählen und den Dialog schließen.
@@ -265,31 +242,31 @@ class GUI(customtkinter.CTk):
                 # Die filepath Variable speichert den ausgewählten Dateipfad, der vom Dateiauswahldialog zurückgegeben wird.
                 # Nachdem der Benutzer eine Datei ausgewählt und den Dialog geschlossen hat, enthält filepath den Pfad zur
                 # ausgewählten TDMS-Datei.
+
+                global hochgeladene_tdms_dateien
+
                 tdms_Label = customtkinter.CTkLabel(self)
                 tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
-                filepath = filedialog.askopenfilename(filetypes=[("TDMS files", "*.tdms")])
+                file_paths = filedialog.askopenfilenames(filetypes=[("TDMS files", "*.tdms")])
 
-                if filepath:
-                    self.metadata = td.read_metadata(filepath).properties
-                    # Schleife verwendet, um durch die Metadaten zu iterieren und sie nacheinander auf der Konsole auszugeben.
-                    # Jedes Metadatum wird in der Form "name: wert" angezeigt.
-                    print("Metadaten der TDMS-Datei:")
-                    print("-----------------------------")
-                    for key, value in self.metadata.items():
-                        print(f"{key}: {value}")
+                if file_paths:
+                     #hochgeladene_tdms_dateien.clear()  # Leere die Liste vor dem Hinzufügen der neuen Pfade
 
+                    for filepath in file_paths:
+                        self.metadata = td.read_metadata(filepath).properties
+                        print(file_paths)
+                        print("Metadaten der TDMS-Datei:")
+                        print("-----------------------------")
+                        for key, value in self.metadata.items():
+                            print(f"{key}: {value}")
 
-
-                    tdms_Label.configure(text="Metadata uploaded successfully.")   # text=" 'title' ist: " + title_Tdms_file
-                    #self.createJsonFile()
+                        tdms_Label.configure(text="Metadata uploaded successfully.")
+                        hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
 
                 else:
                     tdms_Label.configure(text="No file was selected.")
 
-
-
             # Create an experiment
-
 
             def create_Experiment(title, tag):
 
@@ -337,7 +314,7 @@ class GUI(customtkinter.CTk):
 
         def sidebar_edit_event(self):
             print("sidebar_button click")
-            self.label = customtkinter.CTkLabel(self, text="Edit")
+            self.label = customtkinter.CTkLabel(self, text="")
             self.label.grid(row=0, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
     # if something goes wrong, the corresponding HTTPError will be raised
     except HTTPError as e:
