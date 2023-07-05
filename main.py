@@ -21,7 +21,7 @@ customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "gre
 #root = Tk()
 # creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
 # old key: 9478088ecd011a7dcbf3b4a175373557455d0128d171a8d645799c21ce5307f01b8674708edd7ef9d226209
-manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="f8952cd129314c3ea48de03476b09f917ecb0515ab9d4fe421e4825d43a6aa3176e1996fa6c2ff40e5b02")
+manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="9e39247b7c2d1494a5e862556aba3fb98f5f81fa2f018ff467afac7299c90772f0cde60d38bb9fb048842")
 
 
 #root.geometry("325x400")
