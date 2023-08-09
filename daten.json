@@ -1,4 +1,22 @@
 {
     "Title": "",
-    "Tags": ""
+    "Tags": "",
+    "Kraftmessung1.tdms": {
+        "Folder": "",
+        "Creator (ID: 2)": "",
+        "Identifier (ID: 1)": "",
+        "Software": "VNWA3",
+        "Software Version": "VNWA36.6 (2015)",
+        "Description (ID: 17)": "MesUSoft TDMS-File",
+        "Date (ID: 8)": "2023-08-08",
+        "Subject (ID: 6)": "Generator",
+        "Title": "/Users/muhamedjaber/Desktop/Uni/Bachelor/Bachelorarbeit/npTDMS/MA Jaber/03_Kaltgas_316L-Al_02_vf_3000.tdms",
+        "Publisher (ID: 4)": "",
+        "PublicationYear (ID: 5)": "",
+        "ResourceType (ID: 10)": "Measurement",
+        "Contribter (ID: 7)": "",
+        "RelatedIdentifier (ID: 12)": "",
+        "GeoLocation (ID: 18)": "Bremen, Germany",
+        "Language (ID: 7)": "English"
+    }
 }

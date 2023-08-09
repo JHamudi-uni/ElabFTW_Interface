@@ -1,15 +1,11 @@
 import elabapy
-# json is used for encoding and decoding JSON data.
 import json
-# imports the HTTPError exception from the requests library, which is used to handle errors that occur
-# during HTTP requests.
 from requests.exceptions import HTTPError
 from tkinter import *
 from tkinter import filedialog
 import datetime
 import customtkinter
 from nptdms import TdmsFile as td
-import requests
 import os
 
 
@@ -18,14 +14,11 @@ customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
 
 
-#root = Tk()
 # creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
-# old key: 9478088ecd011a7dcbf3b4a175373557455d0128d171a8d645799c21ce5307f01b8674708edd7ef9d226209
-manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="9e39247b7c2d1494a5e862556aba3fb98f5f81fa2f018ff467afac7299c90772f0cde60d38bb9fb048842")
+manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="e8dd740722cc59ee3e8c70d696a8275551300504ff8ec3bbdd81e7cdaf1d1387c1631b00a5c2e044f6772")
 
 
-#root.geometry("325x400")
-#root.title("Create Experiment")
+
 hochgeladene_tdms_dateien = []
 
 # class App erbt von customkinter.CTk
@@ -36,6 +29,8 @@ class GUI(customtkinter.CTk):
         # Ruft den Konstruktor der übergeordneten Klasse auf, um das Hauptfenster zu initialisieren.
         super().__init__()
         self.metadata = {}
+        self.uploaded_file_names = set()
+
         global filename
         #hochgeladene_tdms_dateien = []
 
@@ -112,7 +107,8 @@ class GUI(customtkinter.CTk):
 
         def sidebar_create_event(self):
 
-
+            self.uploaded_file_names.clear()
+            hochgeladene_tdms_dateien.clear()
             print("sidebar_button Create click")
 
             #self.label = customtkinter.CTkLabel(self, text="Create")
@@ -139,9 +135,8 @@ class GUI(customtkinter.CTk):
 
             #self.folderLabel = customtkinter.CTkLabel(self, text="Files:")
             #self.folderLabel.grid(row=3, column=1, padx=(150, 0), pady=(0, 10), sticky="W")
-            self.folderText_field = customtkinter.CTkEntry(self, placeholder_text="Fil"
-                                                                                  "es")
-            self.folderText_field.grid(row=2, column=1, padx=(160, 160), pady=(10, 20))
+            #self.folderText_field = customtkinter.CTkEntry(self, placeholder_text="Files")
+            #self.folderText_field.grid(row=2, column=1, padx=(160, 160), pady=(10, 20))
 
             #self.grid_columnconfigure(1, weight=1)
             #self.grid_propagate(0)
@@ -216,12 +211,38 @@ class GUI(customtkinter.CTk):
                     print(f"File '{daten_json_path}' does not exist.")
 
 
-            def uploadFile():
+            def prepare_for_upload():
                 # use the filedialog module to open a file dialog box and allow the user to select a file to upload
+                global hochgeladene_tdms_dateien
                 file_paths = filedialog.askopenfilenames()
-                # update the folderText_field Entry widget with the path(s) to the selected file(s)
-                self.folderText_field.delete(0, END)
-                self.folderText_field.insert(0, ";".join(file_paths))
+                #tdms_Label = customtkinter.CTkLabel(self)
+                #tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
+
+                for filepath in file_paths:
+                    if filepath.lower().endswith(".tdms"):
+                        #upload_tdms_file()
+                        self.metadata = td.read_metadata(filepath).properties
+                        print(file_paths)
+                        print("Metadaten der TDMS-Datei:")
+                        print("-----------------------------")
+                        for key, value in self.metadata.items():
+                            print(f"{key}: {value}")
+
+                        #tdms_Label.configure(text="Metadata uploaded successfully.")
+                        # wird in createJsonFile verwendet
+                        hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
+                        self.uploaded_file_names.add(filepath)
+                        # Hier können Sie spezifische Aktionen für .tdms-Dateien durchführen, falls gewünscht
+                    else:
+                        self.uploaded_file_names.add(filepath)
+                        print(self.uploaded_file_names)
+
+                        # Hier können Sie den Code einfügen, um Dateien normal hochzuladen
+                        # update the folderText_field Entry widget with the path(s) to the selected file(s)
+                    #self.folderText_field.delete(0, END)
+                    #self.folderText_field.insert(0, ";".join(file_paths))
+
+
 
 
             def upload_tdms_file():
@@ -243,7 +264,7 @@ class GUI(customtkinter.CTk):
                 # Nachdem der Benutzer eine Datei ausgewählt und den Dialog geschlossen hat, enthält filepath den Pfad zur
                 # ausgewählten TDMS-Datei.
 
-                global hochgeladene_tdms_dateien
+                #global hochgeladene_tdms_dateien
 
                 tdms_Label = customtkinter.CTkLabel(self)
                 tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
@@ -263,7 +284,9 @@ class GUI(customtkinter.CTk):
                         tdms_Label.configure(text="Metadata uploaded successfully.")
                         hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
 
+
                 else:
+
                     tdms_Label.configure(text="No file was selected.")
 
             # Create an experiment
@@ -288,13 +311,23 @@ class GUI(customtkinter.CTk):
                 exp_id = response['id']
                 uploadJsonFile(exp_id)
 
+
+
                 # upload the selected files to the experiment
-                file_paths = self.folderText_field.get().split(";")
-                for file_path in file_paths:
-                    with open(file_path, 'rb') as f:
-                        params = {'file': f}
-                        manager.upload_to_experiment(exp_id, params)
-                        print(f"Uploaded file '{file_path}' to experiment {exp_id}.")
+                print(self.uploaded_file_names)
+                for attached_files in self.uploaded_file_names:
+                    if not attached_files.lower().endswith(".tdms"):
+                        with open(attached_files, 'rb') as f:
+                            params = {'file': f}
+                            manager.upload_to_experiment(exp_id, params)
+                            print(f"Uploaded file '{attached_files}' to experiment {exp_id}.")
+
+                #file_paths = self.folderText_field.get().split(";")
+               # for file_path in file_paths:
+                #    with open(file_path, 'rb') as f:
+                 #       params = {'file': f}
+                  #      manager.upload_to_experiment(exp_id, params)
+                   #     print(f"Uploaded file '{file_path}' to experiment {exp_id}.")
 
 
 
@@ -302,11 +335,11 @@ class GUI(customtkinter.CTk):
                               command=lambda: create_Experiment(self.titleText_field.get(), self.tagText_field.get()))
             myButton.grid(row=4, column=1, padx=(20, 20), pady=(10, 20), sticky = "es")
 
-            myUploadButton = customtkinter.CTkButton(self, text="Add File", command=uploadFile)
+            myUploadButton = customtkinter.CTkButton(self, text="Add File", command=prepare_for_upload)
             myUploadButton.grid(row=1, column=1, padx=(0,0), pady=(10, 10))
 
-            metaDataButton = customtkinter.CTkButton(self, text="Add Metadata", command=upload_tdms_file)
-            metaDataButton.grid(row=3, column=1, padx=(20, 20), pady=(10, 10), sticky= "e")
+            #metaDataButton = customtkinter.CTkButton(self, text="Add Metadata", command=upload_tdms_file)
+            #metaDataButton.grid(row=3, column=1, padx=(20, 20), pady=(10, 10), sticky= "e")
 
 
 
