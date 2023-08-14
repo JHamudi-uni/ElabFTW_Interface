@@ -157,25 +157,28 @@ class GUI(customtkinter.CTk):
             def get_current_date():
                 return datetime.date.today().strftime('%Y-%m-%d')
 
+
+
             def display_metadata(file_path):
                 #if not self.metadata_window_open and file_path.lower().endswith(".tdms"):
-                self.metadata_window = Toplevel(self)
-                self.metadata_window.title("Metadata")
-                self.metadata_window.geometry("400x300")
+                    self.metadata_window = Toplevel(self)
+                    self.metadata_window.title("Metadata")
+                    center_window(self.metadata_window, 400, 500)
+                    self.metadata_window.grab_set()
 
-                metadata_label = Label(self.metadata_window, text="Metadaten der TDMS-Datei:")
-                metadata_label.pack()
+                    metadata_label = Label(self.metadata_window, text="Metadaten der TDMS-Datei:")
+                    metadata_label.pack()
 
-                tdms_metadata = td.read_metadata(file_path).properties
-                for key, value in tdms_metadata.items():
-                    metadata_entry = Label(self.metadata_window, text=f"{key}: {value}")
-                    metadata_entry.pack()
+                    tdms_metadata = td.read_metadata(file_path).properties
+                    for key, value in tdms_metadata.items():
+                        metadata_entry = Label(self.metadata_window, text=f"{key}: {value}")
+                        metadata_entry.pack()
 
-                self.metadata_window.lift()
-                #self.metadata_window.protocol("WM_DELETE_WINDOW", self.close_metadata_window)
-                self.metadata_window_open = True
+                    self.metadata_window.lift()
+                    #self.metadata_window.protocol("WM_DELETE_WINDOW", close_metadata_window)
+                    #self.metadata_window_open = True
 
-            def close_metadata_window(self):
+            def close_metadata_window():
                 self.metadata_window.destroy()
                 self.metadata_window_open = False
 
@@ -238,7 +241,7 @@ class GUI(customtkinter.CTk):
                     self.current_window.destroy()  # Schließe das aktuelle Fenster, falls geöffnet
                 value2_window = Toplevel(self)
                 value2_window.title("Selected Files")
-                center_window(value2_window, 800, 400)
+                center_window(value2_window, 725, 400)
                 self.current_window = value2_window  # Setze das aktuelle Fenster auf das neue Fenster
                 value2_window.grab_set() # grab_set() erstellt ein "Modal"-Fenster, das den Fokus auf sich zieht und andere Fenster im Hintergrund blockiert
 
@@ -252,20 +255,26 @@ class GUI(customtkinter.CTk):
                 #scrollbar.pack(side="right", fill="y")
                 #canvas.configure(yscrollcommand=scrollbar.set)
 
+                # Aufteilung der Dateien in .tdms und andere Dateitypen
+                tdms_files = [file_path for file_path in self.uploaded_file_names if
+                              file_path.lower().endswith(".tdms")]
+                other_files = [file_path for file_path in self.uploaded_file_names if
+                               not file_path.lower().endswith(".tdms")]
+
                 # Erstelle die Tabellenüberschrift
                 headers = ["File Name", "File Type", "Metadaten", "Action", "Display"] # ["File Name", "File Type", "Metadaten", "Action"]
                 for col, header in enumerate(headers):
-                    label = Label(table_frame, text=header, font=("Arial", 12, "bold"))
+                    label = ctk.CTkLabel(table_frame, text=header, font=("Arial", 14, "bold"))
                     label.grid(row=0, column=col, padx=5, pady=5)
 
                 # Fülle die Tabelle mit den ausgewählten Dateien
-                for row, file_path in enumerate(self.uploaded_file_names, start=1):
+                for row, file_path in enumerate(tdms_files + other_files, start=1):
                     file_name = os.path.basename(file_path)
                     file_type = os.path.splitext(file_name)[1][1:].upper() if not file_path.lower().endswith(
                         ".tdms") else "TDMS"
                     has_metadata = "Metadaten" if file_path in hochgeladene_tdms_dateien else ""
 
-                    file_name_label = Label(table_frame, text=file_name)
+                    file_name_label = ctk.CTkLabel(table_frame, text=file_name, font=customtkinter.CTkFont(size=12, weight="bold"))
                     file_name_label.grid(row=row, column=0, padx=5, pady=5)
 
                     file_type_label = Label(table_frame, text=file_type)
@@ -274,12 +283,12 @@ class GUI(customtkinter.CTk):
                     metadata_label = Label(table_frame, text=has_metadata)
                     metadata_label.grid(row=row, column=2, padx=5, pady=5)
 
-                    remove_button = Button(table_frame, text="Remove",
+                    remove_button = ctk.CTkButton(table_frame, text="Remove", width=12,
                                            command=lambda fp=file_path: remove_selected_file(fp))
                     remove_button.grid(row=row, column=3, padx=5, pady=5)
 
                     if file_path.lower().endswith(".tdms"):
-                        display_metadata_button = Button(table_frame, text="Display Metadata",
+                        display_metadata_button = ctk.CTkButton(table_frame, text="Display Metadata",
                                                          command=lambda fp=file_path: display_metadata(fp))
                         display_metadata_button.grid(row=row, column=4, padx=5, pady=5)
 
