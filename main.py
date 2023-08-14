@@ -3,8 +3,11 @@ import json
 from requests.exceptions import HTTPError
 from tkinter import *
 from tkinter import filedialog
+from tkinter import ttk
 import datetime
 import customtkinter
+import customtkinter as ctk
+from tkinter import Toplevel, Label
 from nptdms import TdmsFile as td
 import os
 
@@ -15,7 +18,7 @@ customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "gre
 
 
 # creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
-manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="e8dd740722cc59ee3e8c70d696a8275551300504ff8ec3bbdd81e7cdaf1d1387c1631b00a5c2e044f6772")
+manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token="c066a0aa5e90d53561e00d064219943761df45d2475a6fd608f0b68f153150a31e3b157ddee4b00e77232")
 
 
 
@@ -29,7 +32,13 @@ class GUI(customtkinter.CTk):
         # Ruft den Konstruktor der übergeordneten Klasse auf, um das Hauptfenster zu initialisieren.
         super().__init__()
         self.metadata = {}
+        self.metadata_window = None
+        self.metadata_window_open = False
         self.uploaded_file_names = set()
+        #self.uploaded_file_names = []
+
+        # Variable zur Verfolgung des aktuellen geöffneten Fensters
+        self.current_window = None
 
         global filename
         #hochgeladene_tdms_dateien = []
@@ -79,6 +88,8 @@ class GUI(customtkinter.CTk):
         self.appearance_mode_optionemenu.set("Dark")
 
 
+
+
     try:
 
         # uses the json.dumps function to convert the exp variable (which contains information about an experiment)
@@ -103,6 +114,7 @@ class GUI(customtkinter.CTk):
 
         def change_appearance_mode_event(self, new_appearance_mode: str):
             customtkinter.set_appearance_mode(new_appearance_mode)
+
 
 
         def sidebar_create_event(self):
@@ -145,9 +157,147 @@ class GUI(customtkinter.CTk):
             def get_current_date():
                 return datetime.date.today().strftime('%Y-%m-%d')
 
+            def display_metadata(file_path):
+                #if not self.metadata_window_open and file_path.lower().endswith(".tdms"):
+                self.metadata_window = Toplevel(self)
+                self.metadata_window.title("Metadata")
+                self.metadata_window.geometry("400x300")
+
+                metadata_label = Label(self.metadata_window, text="Metadaten der TDMS-Datei:")
+                metadata_label.pack()
+
+                tdms_metadata = td.read_metadata(file_path).properties
+                for key, value in tdms_metadata.items():
+                    metadata_entry = Label(self.metadata_window, text=f"{key}: {value}")
+                    metadata_entry.pack()
+
+                self.metadata_window.lift()
+                #self.metadata_window.protocol("WM_DELETE_WINDOW", self.close_metadata_window)
+                self.metadata_window_open = True
+
+            def close_metadata_window(self):
+                self.metadata_window.destroy()
+                self.metadata_window_open = False
+
+            #CTkSegmentedButton
+            def prepare_for_upload():
+                self.current_window
+                if self.current_window:
+                    self.current_window.destroy()  # Schließe das aktuelle Fenster, falls geöffnet
+
+
+                # use the filedialog module to open a file dialog box and allow the user to select a file to upload
+                global hochgeladene_tdms_dateien
+                file_paths = filedialog.askopenfilenames()
+                # tdms_Label = customtkinter.CTkLabel(self)
+                # tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
+
+                for filepath in file_paths:
+
+                    if filepath.lower().endswith(".tdms"):
+                        if filepath in hochgeladene_tdms_dateien:
+                            print(f"Die Datei '{filepath}' wurde bereits hochgeladen.")
+                        else:
+                            # upload_tdms_file()
+                            self.metadata = td.read_metadata(filepath).properties
+                            print(file_paths)
+                            print("Metadaten der TDMS-Datei:")
+                            print("-----------------------------")
+                            for key, value in self.metadata.items():
+                                print(f"{key}: {value}")
+
+                            # tdms_Label.configure(text="Metadata uploaded successfully.")
+                            # wird in createJsonFile verwendet
+                            hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
+                            self.uploaded_file_names.add(filepath)
+                        #self.uploaded_file_names.append((os.path.basename(filepath), os.path.splitext(filepath)[1]))
+                        # Hier können Sie spezifische Aktionen für .tdms-Dateien durchführen, falls gewünscht
+                    else:
+                        #self.uploaded_file_names.append((os.path.basename(filepath), os.path.splitext(filepath)[1]))
+
+                        self.uploaded_file_names.add(filepath)
+                        print(self.uploaded_file_names)
+
+                        # Hier können Sie den Code einfügen, um Dateien normal hochzuladen
+                        # update the folderText_field Entry widget with the path(s) to the selected file(s)
+                    # self.folderText_field.delete(0, END)
+                    # self.folderText_field.insert(0, ";".join(file_paths))
+
+            def center_window(window, width, height):
+                screen_width = window.winfo_screenwidth()
+                screen_height = window.winfo_screenheight()
+
+                x = (screen_width - width) // 2
+                y = (screen_height - height) // 4
+
+                window.geometry(f"{width}x{height}+{x}+{y}")
+
+            def display_selected_files():
+                self.current_window
+                if self.current_window:
+                    self.current_window.destroy()  # Schließe das aktuelle Fenster, falls geöffnet
+                value2_window = Toplevel(self)
+                value2_window.title("Selected Files")
+                center_window(value2_window, 800, 400)
+                self.current_window = value2_window  # Setze das aktuelle Fenster auf das neue Fenster
+                value2_window.grab_set() # grab_set() erstellt ein "Modal"-Fenster, das den Fokus auf sich zieht und andere Fenster im Hintergrund blockiert
+
+                canvas = Canvas(value2_window)
+                canvas.pack(fill="both", expand=True)
+
+                table_frame = Frame(canvas)
+                canvas.create_window((0, 0), window=table_frame, anchor="nw")
+
+                #scrollbar = Scrollbar(value2_window, orient="vertical", command=canvas.yview)
+                #scrollbar.pack(side="right", fill="y")
+                #canvas.configure(yscrollcommand=scrollbar.set)
+
+                # Erstelle die Tabellenüberschrift
+                headers = ["File Name", "File Type", "Metadaten", "Action", "Display"] # ["File Name", "File Type", "Metadaten", "Action"]
+                for col, header in enumerate(headers):
+                    label = Label(table_frame, text=header, font=("Arial", 12, "bold"))
+                    label.grid(row=0, column=col, padx=5, pady=5)
+
+                # Fülle die Tabelle mit den ausgewählten Dateien
+                for row, file_path in enumerate(self.uploaded_file_names, start=1):
+                    file_name = os.path.basename(file_path)
+                    file_type = os.path.splitext(file_name)[1][1:].upper() if not file_path.lower().endswith(
+                        ".tdms") else "TDMS"
+                    has_metadata = "Metadaten" if file_path in hochgeladene_tdms_dateien else ""
+
+                    file_name_label = Label(table_frame, text=file_name)
+                    file_name_label.grid(row=row, column=0, padx=5, pady=5)
+
+                    file_type_label = Label(table_frame, text=file_type)
+                    file_type_label.grid(row=row, column=1, padx=5, pady=5)
+
+                    metadata_label = Label(table_frame, text=has_metadata)
+                    metadata_label.grid(row=row, column=2, padx=5, pady=5)
+
+                    remove_button = Button(table_frame, text="Remove",
+                                           command=lambda fp=file_path: remove_selected_file(fp))
+                    remove_button.grid(row=row, column=3, padx=5, pady=5)
+
+                    if file_path.lower().endswith(".tdms"):
+                        display_metadata_button = Button(table_frame, text="Display Metadata",
+                                                         command=lambda fp=file_path: display_metadata(fp))
+                        display_metadata_button.grid(row=row, column=4, padx=5, pady=5)
+
+                table_frame.update_idletasks()
+
+                canvas.config(scrollregion=canvas.bbox("all"))
+                value2_window.lift()
+
+            def remove_selected_file(file_path):
+
+                self.uploaded_file_names.remove(file_path)
+                if file_path.lower().endswith(".tdms"):
+                    hochgeladene_tdms_dateien.remove(file_path)
+                display_selected_files()
 
 
             def createJsonFile():
+
 
                 title_tdms_file = self.metadata.get("name", "N/A")
                 print(title_tdms_file)
@@ -161,28 +311,30 @@ class GUI(customtkinter.CTk):
                 }
 
                 # Verwende die Liste hochgeladene_tdms_dateien, um die Pfade der hochgeladenen TDMS-Dateien zu durchlaufen
-                for index, tdms_datei in enumerate(hochgeladene_tdms_dateien):
-                    abschnitt_name = f'Kraftmessung{index + 1}.tdms'
-                    abschnitt_daten = {
-                        'Folder': '',
-                        'Creator (ID: 2)': '',
-                        'Identifier (ID: 1)': '',
-                        'Software': 'VNWA3',
-                        'Software Version': 'VNWA36.6 (2015)',
-                        'Description (ID: 17)': description,
-                        'Date (ID: 8)': get_current_date(),
-                        'Subject (ID: 6)': 'Generator',
-                        'Title': tdms_datei,
-                        'Publisher (ID: 4)': '',
-                        'PublicationYear (ID: 5)': '',
-                        'ResourceType (ID: 10)': 'Measurement',
-                        'Contribter (ID: 7)': '',
-                        'RelatedIdentifier (ID: 12)': '',
-                        'GeoLocation (ID: 18)': 'Bremen, Germany',
-                        'Language (ID: 7)': 'English'
-                    }
-                    # Das abschnitt_daten-Dictionary wird dem data-Dictionary hinzugefügt
-                    data[abschnitt_name] = abschnitt_daten
+                for index, tdms_datei in enumerate(self.uploaded_file_names):
+                    if tdms_datei.lower().endswith(".tdms"):
+                        #sorted(self.uploaded_file_names, key=lambda x: (not x.lower().endswith('.tdms'), x))
+                        abschnitt_name = f'Kraftmessung{index + 1}.tdms'
+                        abschnitt_daten = {
+                            'Folder': '',
+                            'Creator (ID: 2)': '',
+                            'Identifier (ID: 1)': '',
+                            'Software': 'VNWA3',
+                            'Software Version': 'VNWA36.6 (2015)',
+                            'Description (ID: 17)': description,
+                            'Date (ID: 8)': get_current_date(),
+                            'Subject (ID: 6)': 'Generator',
+                            'Title': tdms_datei,
+                            'Publisher (ID: 4)': '',
+                            'PublicationYear (ID: 5)': '',
+                            'ResourceType (ID: 10)': 'Measurement',
+                            'Contribter (ID: 7)': '',
+                            'RelatedIdentifier (ID: 12)': '',
+                            'GeoLocation (ID: 18)': 'Bremen, Germany',
+                            'Language (ID: 7)': 'English'
+                        }
+                        # Das abschnitt_daten-Dictionary wird dem data-Dictionary hinzugefügt
+                        data[abschnitt_name] = abschnitt_daten
 
                 # Nachdem alle Abschnitte und Daten hinzugefügt wurden, wird das data-Dictionary in die Datei "daten.json" geschrieben.
                 with open('daten.json', 'w') as json_datei:
@@ -209,38 +361,6 @@ class GUI(customtkinter.CTk):
                         print(f"Uploaded file '{daten_json_path}' to experiment {exp_id}.")
                 else:
                     print(f"File '{daten_json_path}' does not exist.")
-
-
-            def prepare_for_upload():
-                # use the filedialog module to open a file dialog box and allow the user to select a file to upload
-                global hochgeladene_tdms_dateien
-                file_paths = filedialog.askopenfilenames()
-                #tdms_Label = customtkinter.CTkLabel(self)
-                #tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
-
-                for filepath in file_paths:
-                    if filepath.lower().endswith(".tdms"):
-                        #upload_tdms_file()
-                        self.metadata = td.read_metadata(filepath).properties
-                        print(file_paths)
-                        print("Metadaten der TDMS-Datei:")
-                        print("-----------------------------")
-                        for key, value in self.metadata.items():
-                            print(f"{key}: {value}")
-
-                        #tdms_Label.configure(text="Metadata uploaded successfully.")
-                        # wird in createJsonFile verwendet
-                        hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
-                        self.uploaded_file_names.add(filepath)
-                        # Hier können Sie spezifische Aktionen für .tdms-Dateien durchführen, falls gewünscht
-                    else:
-                        self.uploaded_file_names.add(filepath)
-                        print(self.uploaded_file_names)
-
-                        # Hier können Sie den Code einfügen, um Dateien normal hochzuladen
-                        # update the folderText_field Entry widget with the path(s) to the selected file(s)
-                    #self.folderText_field.delete(0, END)
-                    #self.folderText_field.insert(0, ";".join(file_paths))
 
 
 
@@ -335,8 +455,14 @@ class GUI(customtkinter.CTk):
                               command=lambda: create_Experiment(self.titleText_field.get(), self.tagText_field.get()))
             myButton.grid(row=4, column=1, padx=(20, 20), pady=(10, 20), sticky = "es")
 
-            myUploadButton = customtkinter.CTkButton(self, text="Add File", command=prepare_for_upload)
-            myUploadButton.grid(row=1, column=1, padx=(0,0), pady=(10, 10))
+            #myUploadButton = customtkinter.CTkButton(self, text="Add File", command=prepare_for_upload)
+            #myUploadButton.grid(row=1, column=1, padx=(0,0), pady=(10, 10))
+
+            upload_button = ctk.CTkButton(self, text="Upload File", command=prepare_for_upload)
+            upload_button.grid(row=1, column=1, padx=(0,0), pady=(10,10))
+
+            selected_files_button = ctk.CTkButton(self, text="...", width=10, command=display_selected_files)
+            selected_files_button.grid(row=1, column=1, padx=(175, 0), pady=(10, 10))
 
             #metaDataButton = customtkinter.CTkButton(self, text="Add Metadata", command=upload_tdms_file)
             #metaDataButton.grid(row=3, column=1, padx=(20, 20), pady=(10, 10), sticky= "e")
