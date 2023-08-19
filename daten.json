@@ -2,31 +2,5 @@
     "Title": "",
     "Tags": "",
     "Allgemein": "",
-    "Datum": "2023-08-17",
-    "2020-07-14 CS FeMnAlC sprayed00001.sur": {
-        "Ersteller/in (ID: 2)": "root",
-        "Titel (ID: 3)": "2020-07-14 CS FeMnAlC sprayed00001.sur",
-        "Herausgeber (ID: 4)": "Leibniz-Institut f\u00fcr Werkstofforientierte Technologien IWT-Universit\u00e4t Bremen",
-        "Jahr der Ver\u00f6ffentlichung/Datum (ID: 5/8)": "2020- 7-29",
-        "Ressourcentyp (ID: 10)": "Dataset-SUR (surface topography)",
-        "Rechte (ID: 16)": "",
-        "Description (ID: 17)": "Legierung: 316L n = 8000 1/min vf = 2800 mm/min D = 12 mm ap = 1.5*D ae = 0,6 mm",
-        "GeoLocation (ID: 18)": "Bremen, Germany",
-        "F\u00f6rderkennzeichen (ID: 19)": "2342",
-        "Zus\u00e4tzliche Informationen": {
-            "original_axes_manager": null,
-            "signal_unfolded": false
-        }
-    },
-    "03_Kaltgas_316L-Al_01_vf_2800.tdms": {
-        "Ersteller/in (ID: 2)": "root",
-        "Titel (ID: 3)": "03_Kaltgas_316L-Al_01_vf_2800.tdms",
-        "Herausgeber (ID: 4)": "Leibniz-Institut f\u00fcr Werkstofforientierte Technologien IWT-Universit\u00e4t Bremen",
-        "Jahr der Ver\u00f6ffentlichung/Datum (ID: 5/8)": "13.08.2019",
-        "Ressourcentyp (ID: 10)": "Dataset-TDMS (Forces)",
-        "Rechte (ID: 16)": "",
-        "Description (ID: 17)": "Legierung: 316L n = 8000 1/min vf = 2800 mm/min D = 12 mm ap = 1.5*D ae = 0,6 mm",
-        "GeoLocation (ID: 18)": "Bremen, Germany",
-        "F\u00f6rderkennzeichen (ID: 19)": "2342"
-    }
+    "Datum": "2023-08-19"
 }
