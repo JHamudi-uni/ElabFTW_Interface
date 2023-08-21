@@ -1,41 +1,67 @@
 import elabapy
 import json
-from requests.exceptions import HTTPError
-from dotenv import load_dotenv #für die .env datei
-from tkinter import *
-from tkinter import filedialog, messagebox
-
-from tkinter import ttk
-import datetime
-import customtkinter
-import customtkinter as ctk
-from tkinter import Toplevel, Label
-from nptdms import TdmsFile as td
 import os
 import hyperspy.api as hs
 import pprint
+import datetime
+import customtkinter
+import customtkinter as ctk
 import tkinter as tk
+import ssl
 
+from tkinter import *
+from tkinter import filedialog, messagebox
+from tkinter import Toplevel, Label
+from nptdms import TdmsFile as td
+from requests.exceptions import HTTPError
+from dotenv import load_dotenv
 
-
+# SSL ZERTIFIKAT
+os.environ["REQUESTS_CA_BUNDLE"] = 'c:\schoe\python\elabftw\elabftw.pem'
+os.environ["SSL_CERT_FILE"] = 'c:\schoe\python\elabftw\elabftw.pem'
+ssl.match_hostname = lambda cert, hostname: True
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
+
+
+# KONFIGURATION
+
+"""
+Dotenv wird zum laden der Umgebungsvariablen token (aus der .env datei) genutzt.
+Dadurch kann auf das lokale Elab zugegriffen werden, ohne den Token-key im Code abspeichern zu müssen.
+"""
+
 load_dotenv()
 token = os.getenv("ELAB_TOKEN")
 
-# creates an instance of the Manager class from the elabapy library, initializing it with the endpoint and API token
-#https://134.102.38.139/api/v1/
-#https://api.elabftw.net/api/v1/
+"""
+Erstellt eine Instanz der Managerklasse aus der elabapy Bibliothek und initialisiert sie mit dem 
+Endpunkt und dem API-Token
+lokal: https://elabftw.iwt.zz/api/v1/
+token: In die .env Datei schreiben
+"""
+
 manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token=token)
 
 
-
-hochgeladene_tdms_dateien = []
+# GLOBALE VARIABLEN
 
 date_sur = None
 signal_unfolded = None
+original_shape = None
 original_axes_manager = None
+unfolded = None
+signal_type = None
+hyperspy_version = None
+io_plugin = None
+operation = None
+authors = None
+original_filename = None
+time = None
+title_meta = None
+
+hochgeladene_metadaten_dateien = []
 sur_dates = {}
 
 
@@ -43,6 +69,7 @@ sur_dates = {}
 # self ist eine instanz vom Objekt
 # __init__ ist der Konstruktor
 class GUI(customtkinter.CTk):
+
     def __init__(self):
         # Ruft den Konstruktor der übergeordneten Klasse auf, um das Hauptfenster zu initialisieren.
         super().__init__()
@@ -51,37 +78,74 @@ class GUI(customtkinter.CTk):
         self.metadata_window_open = False
         self.uploaded_file_names = set()
         self.value2_window = None
-        #self.uploaded_file_names = []
 
         # Variable zur Verfolgung des aktuellen geöffneten Fensters
         self.current_window = None
-        self.open_windows = []  # List to store all open windows
+        self.open_windows = []  # Liste um alle geöffneten Fenster zu speicher
 
         global filename
 
-        #hochgeladene_tdms_dateien = []
-
-
-        # configure window
+        # GUI Fenster konfiguration
         self.title("ElabAPI")
-        self.geometry(f"{760}x{420}")
+        self.geometry(f"{780}x{525}")
+
+        self.user_guide_text = """
+    Diese Software bietet zwei Hauptoptionen: Das Erstellen eines neuen Experiments ins 
+    eLabFTW (Create) und das Bearbeiten eines bestehenden Experiments (Edit).
+    
+    Create Experiment:
+        1. Title: Geben Sie den Titel Ihres Experiments ein.
+        2. Tags: Fügen Sie Tags hinzu, mehrere Tags sind möglich 
+        (trennen Sie sie mit einem Komma, z. B.: tag1, tag2, usw.).
+        3. Förderkennzeichen: Hier können Sie Organisationen oder 
+        Behörden angeben, die Ihre Forschung finanziert haben.
+        4. Rechte: Wählen Sie die entsprechenden Rechte für das geistige Eigentum 
+        an den Daten aus. Empfohlen werden die Lizenzen 'CC-BY' (BY Attribution) 
+        oder 'CC-0' für Daten und 'CC Version 4.0' für schriftliche Dokumente.
+        5. Allgemein: Feld für allgemeine Angaben, die in der JSON-Datei gespeichert werden.
+        6. Datum: Standardmäßig wird das heutige Datum verwendet. 
+        Sie können ein anderes Datum eingeben oder das Feld leer lassen.
+        7. Upload File: Wählen Sie eine Datei aus, die hochgeladen werden soll. 
+        Unter "..." werden alle ausgewählten Dateien strukturiert angezeigt. 
+        Einige Einträge können bearbeitet und durch Klicken auf "Speichern" bestätigt werden.
+        8. Sobald alle erforderlichen Informationen eingegeben wurden, klicken Sie 
+        auf "Create Experiment", um das Experiment in eLabFTW anzulegen.
+    Hinweis: Durch Klicken auf "Create" werden alle Felder & ausgewählten Dateien geleert. 
+    Bitte klicken Sie nur auf "Create", wenn Sie ein neues Experiment erstellen möchten.
+            
+    Experiment bearbeiten:
+        1. Experiment-ID: Geben Sie die ID des Experiments ein, das Sie bearbeiten möchten.    
+        2. Add Tags: Hier können Sie zusätzliche Tags zum ausgewählten Experiment  
+        hinzufügen. Bestehende Tags werden beibehalten.
+        3. Change Title: Überschreiben Sie den aktuellen Titel des Experiments.
+        """
 
 
-
-        # configure grid layout (4x4)
-        # weight=1 gibt an, dass die Spalte 1 elastisch ist und sich automatisch an
-        # die Breite des Fensters anpassen soll.
+    # GRID LAYOUT KONFIGURATION
+        """
+        konfiguriere grid layout (4x4)
+        weight=1 gibt an, dass die Spalte 1 elastisch ist und sich automatisch an
+        die Breite des Fensters anpassen soll.
+        """
         self.grid_columnconfigure(1, weight=1)
-        # Konfiguration für die Spalten 2 und 3 festgelegt.
-        # Der Parameter weight=0 gibt an, dass diese Spalten nicht elastisch sind und keine
-        # zusätzliche Breite erhalten, wenn das Fenster vergrößert wird.
+
+        """
+        Konfiguration für die Spalten 2 und 3 festgelegt.
+        Der Parameter weight=0 gibt an, dass diese Spalten nicht elastisch sind und keine
+        zusätzliche Breite erhalten, wenn das Fenster vergrößert wird.
+        """
         self.grid_columnconfigure((2, 3), weight=0)
-        # Hier wird die Konfiguration für die Zeilen 0, 1 und 2 festgelegt.
-        # Der Parameter weight=1 gibt an, dass diese Zeilen elastisch sind und sich automatisch
-        # an die Höhe des Fensters anpassen sollen
+
+        """
+        Hier wird die Konfiguration für die Zeilen 0, 1 und 2 festgelegt.
+        Der Parameter weight=1 gibt an, dass diese Zeilen elastisch sind und sich automatisch
+        an die Höhe des Fensters anpassen sollen
+        """
         self.grid_rowconfigure((0, 1, 2), weight=1)
 
-        # create sidebar frame with widgets
+
+    # SIDEBAR ERSTELLEN
+
         self.sidebar_frame = customtkinter.CTkFrame(self, width=140, corner_radius=0)
         # rowspan erlaubt es die tabellenzelle nach unten auszudehnen
         self.sidebar_frame.grid(row=0, column=0, rowspan=7, sticky="nsew") #north, south, east, west
@@ -91,24 +155,47 @@ class GUI(customtkinter.CTk):
         self.logo_label = customtkinter.CTkLabel(self.sidebar_frame, text="ElabFTW", font=customtkinter.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
 
+        # Buttons der Sidebar
         self.sidebar_button_1 = customtkinter.CTkButton(self.sidebar_frame, text="Create", command=self.sidebar_create_event)
         self.sidebar_button_1.grid(row=1, column=0, padx=20, pady=10)
         self.sidebar_button_2 = customtkinter.CTkButton(self.sidebar_frame, text="Edit", command=self.sidebar_edit_event)
         self.sidebar_button_2.grid(row=2, column=0, padx=20, pady=10)
-        self.sidebar_button_3 = customtkinter.CTkButton(self.sidebar_frame, text="Menu",
+        self.sidebar_button_3 = customtkinter.CTkButton(self.sidebar_frame, text="Help",
                                                         command=self.sidebar_menu_event)
         self.sidebar_button_3.grid(row=5, column=0, padx=20, pady=(10,20))
 
-        self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
+        # Darkmode/Lightmode
+        #self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode:", anchor="w")
         #self.appearance_mode_label.grid(row=5, column=0, padx=20, pady=(10, 0))
-        self.appearance_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame, values=["Light", "Dark", "System"],
-                                                                       command=self.change_appearance_mode_event)
+        #self.appearance_mode_optionemenu = customtkinter.CTkOptionMenu(self.sidebar_frame, values=["Light", "Dark", "System"],
+                                                                       #command=self.change_appearance_mode_event)
         #self.appearance_mode_optionemenu.grid(row=6, column=0, padx=20, pady=(10, 20))
+        #self.appearance_mode_optionemenu.set("Dark")
 
-        # set default values
-        self.appearance_mode_optionemenu.set("Dark")
 
-        # EDIT SIDEBAR GUI######################################################
+
+    ###########################################################################
+    #                               MENU GUI                                  #
+    ###########################################################################
+
+        self.user_guide_label = customtkinter.CTkLabel(self, text=self.user_guide_text, justify="left", padx=10, pady=10)
+        self.user_guide_label.grid_forget()
+
+        self.user_guide_title = customtkinter.CTkLabel(self, text="Willkommen in der GUI-Benutzeranleitung:",
+                                                       font=customtkinter.CTkFont(size=16, weight="bold"))
+        self.user_guide_title.grid_forget()
+
+        self.frame = customtkinter.CTkFrame(self, width=200, height=150)
+        self.frame.grid_forget()
+        self.frame_label = customtkinter.CTkLabel(self.frame, text=self.user_guide_text, anchor="w", justify="left", font=customtkinter.CTkFont(size=12))
+        self.frame_label.grid_forget()
+
+
+
+        ###########################################################################
+        #                               EDIT GUI                                  #
+        ###########################################################################
+
         self.experiment_id_label = customtkinter.CTkLabel(self, text="Edit Experiment",
                                                 font=customtkinter.CTkFont(size=16, weight="bold"))
         self.experiment_id_label.grid_forget()
@@ -122,32 +209,28 @@ class GUI(customtkinter.CTk):
         self.title_entry = customtkinter.CTkEntry(self, placeholder_text="Change Title")
         self.title_entry.grid_forget()
 
-        self.upload_button_edit = tk.Button(self, text="Datei hochladen", command=self.upload_file_edit)
+        self.upload_button_edit = customtkinter.CTkButton(self, text="Add Files", command=self.prepare_for_upload)
         self.upload_button_edit.grid_forget()
 
-        self.edit_exp_button = customtkinter.CTkButton(self, text="Edit Experiment",
-                                                command=lambda: self.uploaded_file_edit)
+        self.edit_exp_button = customtkinter.CTkButton(self, text="Edit Experiment", command=self.upload_file_edit)
         self.edit_exp_button.grid_forget()
 
-        #######################################################################
+        self.link_button = customtkinter.CTkButton(self, text="Link Database", command=self.open_link_window)
+        self.link_button.grid_forget()
 
-        """
-                GUI OBJECTS
-                """
-        ##CREATE SIDEBAR GUI #########################################################################################
+
+
+        ###########################################################################
+        #                               CREATE GUI                                #
+        ###########################################################################
 
         self.headline_label = customtkinter.CTkLabel(self, text="Create new Experiment",
                                                      font=customtkinter.CTkFont(size=16, weight="bold"))
         self.headline_label.grid_forget()
 
-        # self.titleLabel = customtkinter.CTkLabel(self, text="Title:")
-        # self.titleLabel.grid(row=0, column=1, padx=(150, 0), pady=(50, 10), sticky="W")
         self.titleText_field = customtkinter.CTkEntry(self, placeholder_text="Title")
         self.titleText_field.grid_forget()
 
-        # sticky=w nach links positionieren
-        # self.tagLabel = customtkinter.CTkLabel(self, text="Tags:")
-        # self.tagLabel.grid(row=1, column=1, padx=(150, 0), pady=(0, 10), sticky="W")
         self.tagText_field = customtkinter.CTkEntry(self, placeholder_text="Tags")
         self.tagText_field.grid_forget()
 
@@ -178,75 +261,151 @@ class GUI(customtkinter.CTk):
                                                                              self.datum_field.get()))
         self.myButton.grid_forget()
 
-        #response = manager.create_experiment()
-        #self.myLabel = customtkinter.CTkLabel(self, text=f"Created experiment with id {response['id']}.")
         self.myLabel = customtkinter.CTkLabel(self)
         self.myLabel.grid_forget()
 
-        # self.folderLabel = customtkinter.CTkLabel(self, text="Files:")
-        # self.folderLabel.grid(row=3, column=1, padx=(150, 0), pady=(0, 10), sticky="W")
-        # self.folderText_field = customtkinter.CTkEntry(self, placeholder_text="Files")
-        # self.folderText_field.grid(row=2, column=1, padx=(160, 160), pady=(10, 20))
 
-        # self.grid_columnconfigure(1, weight=1)
-        # self.grid_propagate(0)
 
-        ###########################################################################################
 
-    #### EDIT FUNCTIONS ####
+    ###########################################################################
+    #                               MENU FUNKTIONEN                           #
+    ###########################################################################
 
+
+    # Menu Funktionen hier erstellen
+
+
+
+    ###########################################################################
+    #                               EDIT FUNKTIONEN                           #
+    ###########################################################################
+
+        """
+           Öffnet ein neues Fenster zur verlinkung von Database items mit einem Experiment.
+           Wenn ein aktuelles Fenster bereits offen ist, wird es geschlossen.
+        
+           @return: None
+        """
+    def open_link_window(self):
+        if self.current_window:
+            self.current_window.destroy()
+        self.link_window = tk.Toplevel(self)
+        self.link_window.title("Link Databases")
+        self.link_window.geometry("340x200")  # Größe des Fensters setzen
+
+        self.current_window = self.link_window  # Setze das aktuelle Fenster auf das neue Fenster
+        self.link_window.grab_set()
+
+        # Database Linking Sektion
+        database_frame = tk.Frame(self.link_window)
+        database_frame.grid(padx=20, pady=20)
+
+        database_label = customtkinter.CTkLabel(database_frame, text="Database Linking",
+                                                font=customtkinter.CTkFont(size=14, weight="bold"))
+        database_label.grid(row=0, column=0, columnspan=2, pady=(0, 10))
+
+        self.database_source_label = customtkinter.CTkLabel(database_frame, text="Source Experiment ID:")
+        self.database_source_label.grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(0, 5))
+        self.database_source_entry = customtkinter.CTkEntry(database_frame, placeholder_text=self.experiment_id_entry.get())
+        self.database_source_entry.grid(row=1, column=1, padx=(0, 10), pady=(0, 5))
+
+        self.database_target_label = customtkinter.CTkLabel(database_frame, text="Target Database ID:")
+        self.database_target_label.grid(row=2, column=0, sticky="w", padx=(0, 10), pady=(0, 5))
+        self.database_target_entry = customtkinter.CTkEntry(database_frame, placeholder_text="ID of Database Item")
+        self.database_target_entry.grid(row=2, column=1, padx=(0, 10), pady=(0, 5))
+
+        self.database_link_button = customtkinter.CTkButton(database_frame, text="Link to Database",
+                                                            command=lambda: self.link_to_database(self.link_window))
+        self.database_link_button.grid(row=3, column=0, columnspan=2, pady=(10, 0))
+
+
+        """
+        Verknüpft die ausgewählte Experiment-ID mit der Ziel-Datenbank-ID.
+
+        @param link_window: Das Fenster, in dem die Verknüpfung stattfindet.
+        @return: None
+        """
+    def link_to_database(self, link_window):
+        source_experiment_id = self.experiment_id_entry.get()
+        target_database_id = self.database_target_entry.get()
+        # Hier die Logik zur Verlinkung von Experiment zu Datenbank einfügen
+        # link database item xx to experiment yy
+        params = {"link": target_database_id, "targetEntity": "items"}
+        print(manager.add_link_to_experiment(source_experiment_id, params))
+
+        messagebox.showinfo("Database Linking", f"Experiment {source_experiment_id} linked to Database {target_database_id} successfully!")
+        link_window.destroy()
+
+
+        """
+        Aktualisiert das ausgewählte Experiment mit den eingefügten Informationen und Dateien.
+
+        Lädt ausgewählte Dateien in ein Experiment hoch, aktualisiert Titel, Datum und Inhalt des Experiments,
+        fügt Tags hinzu und erstellt zum Schluss eine JSON-Datei mit den aktualisierten Informationen.
+
+        @return: None
+        """
     def upload_file_edit(self):
-
         experiment_id_edit = self.experiment_id_entry.get()
-        file_path_edit = filedialog.askopenfilename()
         tag_id_edit = self.tag_entry.get()
         title_id_edit = self.title_entry.get()
 
-        if file_path_edit:
-            try:
-                with open(file_path_edit, "rb") as file:
+        # Lädt die ausgewählten Dateien zum Experiment
+        print(self.uploaded_file_names)
+        for attached_files in self.uploaded_file_names:
+            if not attached_files.lower().endswith(".tdms") and not attached_files.lower().endswith(".sur"):
+                with open(attached_files, 'rb') as file:
                     params_file = {'file': file}
+                    manager.upload_to_experiment(experiment_id_edit, params_file)
+                    print(f"Uploaded file '{attached_files}' to experiment {experiment_id_edit}.")
 
-                    if tag_id_edit != "":
-                        tags = tag_id_edit.split(",")
-                        for t in tags:
-                            params_tag = {"tag": t.strip()}
-                            print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
-                    # params_tag = {"tag": tag_id_edit}
-
-                    params_update = {"title": title_id_edit, "date": "20200504", "body": "New body content",
-                                     "metadata": '{"foo":1, "bar":"elab!"}'}
-                    params_body = {"bodyappend": "appended text<br>"}
-
-                    print(manager.post_experiment(experiment_id_edit, params_body))
-                    print(manager.post_experiment(experiment_id_edit, params_update))
-                    print(manager.upload_to_experiment(experiment_id_edit, params_file))
-                    print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
+        if tag_id_edit != "":
+            tags = tag_id_edit.split(",")
+            for t in tags:
+                params_tag = {"tag": t.strip()}
+                print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
+        self.createJsonFile()
+        self.uploadJsonFile(experiment_id_edit)
 
 
-            except Exception as e:
-                messagebox.showerror("Fehler", f"Fehler beim Hochladen der Datei: {str(e)}")
+        params_update = {"title": title_id_edit, "date": self.get_current_date(), "body": "New body content"}
+        params_body = {"bodyappend": "appended text<br>"}
 
-    #### CREATE FUNCTIONS ####
+        print(manager.post_experiment(experiment_id_edit, params_body))
+        print(manager.post_experiment(experiment_id_edit, params_update))
+        print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
 
+
+
+    ###########################################################################
+    #                               CREATE FUNKTIONEN                         #
+    ###########################################################################
+        """
+        Bereite die Dateien zum Upload vor.
+        Unterschiedliche Dateitypen werden anders behandelt bzw. gespeichert.
+        
+        Schließt ein aktuelles Fenster, falls geöffnet, und öffnet ein Dateidialogfeld,
+        um den Benutzern die Auswahl von Dateien zum hochladen zu ermöglichen.
+
+        @return: None
+        """
     def prepare_for_upload(self):
         self.current_window
         if self.current_window:
             self.current_window.destroy()  # Schließe das aktuelle Fenster, falls geöffnet
 
-        # use the filedialog module to open a file dialog box and allow the user to select a file to upload
-        global hochgeladene_tdms_dateien
+        # Das Modul filedialog wird verwendet, um ein Dateidialogfeld zu öffnen und dem Benutzer die Möglichkeit zu
+        # geben, eine Datei zum Hochladen auszuwählen
+        global hochgeladene_metadaten_dateien
         file_paths = filedialog.askopenfilenames()
-        # tdms_Label = customtkinter.CTkLabel(self)
-        # tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
+
 
         for filepath in file_paths:
 
             if filepath.lower().endswith(".tdms"):
-                if filepath in hochgeladene_tdms_dateien:
+                if filepath in hochgeladene_metadaten_dateien:
                     print(f"Die Datei '{filepath}' wurde bereits hochgeladen.")
                 else:
-                    # upload_tdms_file()
                     self.tdmsMetadata = td.read_metadata(filepath).properties
                     print(file_paths)
                     print("Metadaten der TDMS-Datei:")
@@ -254,14 +413,12 @@ class GUI(customtkinter.CTk):
                     for key, value in self.tdmsMetadata.items():
                         print(f"{key}: {value}")
 
-                    # tdms_Label.configure(text="Metadata uploaded successfully.")
                     # wird in createJsonFile verwendet
-                    hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
+                    hochgeladene_metadaten_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
                     self.uploaded_file_names.add(filepath)
-                # self.uploaded_file_names.append((os.path.basename(filepath), os.path.splitext(filepath)[1]))
-                # Hier können Sie spezifische Aktionen für .tdms-Dateien durchführen, falls gewünscht
+
             elif filepath.lower().endswith(".sur"):
-                if filepath in hochgeladene_tdms_dateien:
+                if filepath in hochgeladene_metadaten_dateien:
                     print(f"Die Datei '{filepath}' wurde bereits hochgeladen.")
                 else:
                     s = hs.load(filepath)
@@ -273,20 +430,24 @@ class GUI(customtkinter.CTk):
                     for key, value in surfaceMetadata.items():
                         print(f"{key}:")
                         pprint.pprint(value, indent=4)
-                    hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
+                    hochgeladene_metadaten_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
                     self.uploaded_file_names.add(filepath)
 
             else:
-                # self.uploaded_file_names.append((os.path.basename(filepath), os.path.splitext(filepath)[1]))
-
                 self.uploaded_file_names.add(filepath)
                 print(self.uploaded_file_names)
 
-                # Hier können Sie den Code einfügen, um Dateien normal hochzuladen
-                # update the folderText_field Entry widget with the path(s) to the selected file(s)
-            # self.folderText_field.delete(0, END)
-            # self.folderText_field.insert(0, ";".join(file_paths))
+    """
+        Zentriert ein Fenster auf dem Bildschirm.
 
+        Berechnet die Position (x, y) basierend auf der Bildschirmgröße
+        und positioniert dann das Fenster in der Mitte des Bildschirms.
+
+        @param window: Das Fenster, das zentriert werden soll.
+        @param width: Die Breite des Fensters.
+        @param height: Die Höhe des Fensters.
+        @return: None
+        """
     def center_window(self, window, width, height):
         screen_width = window.winfo_screenwidth()
         screen_height = window.winfo_screenheight()
@@ -296,19 +457,25 @@ class GUI(customtkinter.CTk):
 
         window.geometry(f"{width}x{height}+{x}+{y}")
 
+    """
+        Öffnet eine Tabelle mit den ausgewählten Dateien und ihren Eigenschaften (Name, Typ, Metadaten) an.
+    
+        Ebenso werden die möglichen Aktionen auf die jeweiligen Dateien angezeigt.
+        @return: None
+        """
     def display_selected_files(self):
-        #self.current_window
         if self.current_window:
-            self.current_window.destroy()  # Schließe das aktuelle Fenster, falls geöffnet
+            self.current_window.destroy()
         self.value2_window = tk.Toplevel(self)
         self.open_windows.append(self.value2_window)
         self.value2_window.title("Selected Files")
         self.center_window(self.value2_window, 725, 400)
 
-        # customtkinter.set_appearance_mode("Light", window=value2_window)
 
         self.current_window = self.value2_window  # Setze das aktuelle Fenster auf das neue Fenster
-        self.value2_window.grab_set()  # grab_set() erstellt ein "Modal"-Fenster, das den Fokus auf sich zieht und andere Fenster im Hintergrund blockiert
+        # grab_set() erstellt ein "Modal"-Fenster, das den Fokus auf sich zieht und andere Fenster im
+        # Hintergrund blockiert
+        self.value2_window.grab_set()
 
         canvas = Canvas(self.value2_window)
         canvas.pack(fill="both", expand=True)
@@ -316,12 +483,9 @@ class GUI(customtkinter.CTk):
         table_frame = Frame(canvas)
         canvas.create_window((0, 0), window=table_frame, anchor="nw")
 
-        # scrollbar = Scrollbar(value2_window, orient="vertical", command=canvas.yview)
-        # scrollbar.pack(side="right", fill="y")
-        # canvas.configure(yscrollcommand=scrollbar.set)
 
         # Aufteilung der Dateien in .tdms und andere Dateitypen in drei separate listen
-        # Das erlaubt uns, die Dateien entsprechend ihrer Art zu gruppieren
+        # Das ermöglicht es, die Dateien entsprechend ihrer Art zu gruppieren
         tdms_files = [file_path for file_path in self.uploaded_file_names if
                       file_path.lower().endswith(".tdms")]
         sur_files = [file_path for file_path in self.uploaded_file_names if file_path.lower().endswith(".sur")]
@@ -329,14 +493,15 @@ class GUI(customtkinter.CTk):
                        not file_path.lower().endswith((".tdms", ".sur"))]
 
         # Sortiere die Dateipfade in der gewünschten Reihenfolge
-        # Je nachdem was wir zuerst sortieren, wird die reihenfolge festgelegt, wie die in der tabellenansicht angezeigt werden
+        # Je nachdem was wir zuerst sortieren, wird die reihenfolge festgelegt, wie die in der
+        # tabellenansicht angezeigt werden
         tdms_files.sort()
         sur_files.sort()
         other_files.sort()
 
         # Erstelle die Tabellenüberschrift
         headers = ["File Name", "File Type", "Metadaten", "Action",
-                   "Display"]  # ["File Name", "File Type", "Metadaten", "Action"]
+                   "Display"]
         for col, header in enumerate(headers):
             label = ctk.CTkLabel(table_frame, text=header, font=("Arial", 14, "bold"))
             label.grid(row=0, column=col, padx=5, pady=5)
@@ -346,7 +511,7 @@ class GUI(customtkinter.CTk):
             file_name = os.path.basename(file_path)
             file_type = os.path.splitext(file_name)[1][1:].upper() if not file_path.lower().endswith(
                 ".tdms") else "TDMS"
-            has_metadata = "Metadaten" if file_path in hochgeladene_tdms_dateien or file_path.lower().endswith(
+            has_metadata = "Metadaten" if file_path in hochgeladene_metadaten_dateien or file_path.lower().endswith(
                 ".sur") else ""
 
             file_name_label = ctk.CTkLabel(table_frame, text=file_name,
@@ -378,21 +543,33 @@ class GUI(customtkinter.CTk):
         canvas.config(scrollregion=canvas.bbox("all"))
         self.value2_window.lift()
 
-    def remove_selected_file(self, file_path):
+    """
+       Entfernt die ausgewählte Datei aus der Liste der hochgeladenen Dateien (Wenn auf den Remove button
+       geklickt wird).
+       Falls die Datei Metadaten hatte, werden auch die Metadaten aus der entsprechenden Liste entfernt.
 
+       @param file_path: Der Dateipfad der zu entfernenden Datei.
+       @return: None
+       """
+    def remove_selected_file(self, file_path):
         self.uploaded_file_names.remove(file_path)
-        if file_path.lower().endswith(".tdms"):
-            hochgeladene_tdms_dateien.remove(file_path)
+        if file_path.lower().endswith(".tdms") or file_path.lower().endswith(".sur"):
+            hochgeladene_metadaten_dateien.remove(file_path)
         self.display_selected_files()
+
     def get_current_date(self):
         return datetime.date.today().strftime('%Y-%m-%d')
 
 
+    """
+       Zeigt die Metadaten der ausgewählten Datei an (Mit dem display Metedata Button).
+       Je nach Dateityp werden verschiedene Metadaten angezeigt.
 
-
-
+       @param filepath: Der Dateipfad der Datei, deren Metadaten angezeigt werden sollen.
+       @return: None
+       """
     def display_metadata(self, filepath):
-        # if not self.metadata_window_open and file_path.lower().endswith(".tdms"):
+
         self.metadata_window = Toplevel(self)
         self.metadata_window.title("Metadata")
         self.center_window(self.metadata_window, 480, 500)
@@ -410,7 +587,17 @@ class GUI(customtkinter.CTk):
         elif filepath.lower().endswith(".sur"):
             global date_sur
             global signal_unfolded
+            global unfolded
             global original_axes_manager
+            global original_shape
+            global signal_type
+            global hyperspy_version
+            global io_plugin
+            global operation
+            global authors
+            global original_filename
+            global time
+            global title_meta
 
             s = hs.load(filepath)
             metadata = s.metadata.as_dictionary()
@@ -431,44 +618,23 @@ class GUI(customtkinter.CTk):
             title_meta = metadata['General']['title']
             date_sur = metadata['General']['date']
 
-
-            #save changes
-
             def save_changes():
 
                 try:
                     global date_sur
                     global signal_unfolded
-                    # updated_signal_unfolded = entry_signal_unfolded.get()
-                    # updated_original_axes_manager = entry_original_axes_manager.get()
-                    # updated_original_shape = entry_original_shape.get()
-                    print("HI")
-                    # if self.filepath is not None:
+
+
+                    # Falls self.filepath ungleich None ist:
                     sur_dates[filepath] = self.entry_date.get()
-                    print("Bye")
-                    # date_sur = entry_date.get()
 
                     print("entry get:" + self.entry_date.get())
-                    print("After:" + date_sur)
 
-                    # Update the metadata dictionary with the new values
-                    # metadata['_HyperSpy']['Folding']['signal_unfolded'] = updated_signal_unfolded
-                    # metadata['_HyperSpy']['Folding']['original_axes_manager'] = updated_original_axes_manager
-                    # metadata['_HyperSpy']['Folding']['original_shape'] = updated_original_shape
+                    # Aktualisiert das metadata dictionary mit den neuen Werten
                     self.metadata['General']['date'] = date_sur
                     print("Metadata: " + self.metadata['General']['date'])
 
-                    # Update the textboxes with the new values
-                    # entry_signal_unfolded.delete(0, tk.END)
-                    # entry_signal_unfolded.insert(0, "None" if signal_unfolded is None else signal_unfolded)
-
-                    # entry_original_axes_manager.delete(0, tk.END)
-                    # entry_original_axes_manager.insert(0,
-                    #                                   "None" if original_axes_manager is None else original_axes_manager)
-
-                    # entry_original_shape.delete(0, tk.END)
-                    # entry_original_shape.insert(0, "None" if original_shape is None else original_shape)
-
+                    # Aktualisiert die textbox mit den neuen Werten
                     self.entry_date.delete(0, tk.END)
                     self.entry_date.insert(0,
                                            "None" if sur_dates.get(filepath) is None else sur_dates[filepath])
@@ -477,10 +643,14 @@ class GUI(customtkinter.CTk):
                 except Exception as e:
                     print("An error occurred while saving changes:", str(e))
 
-            # update textbox
+            """
+               Aktualisiert die Daten mit den Metadatenwerten (Aus dem Dictionary in dem die eingelesenen 
+               Daten gespeichert sind).
 
+               @return: None
+               """
             def update_textboxes():
-                print("HERE")
+
                 # Hyperspy
                 original_axes_manager = self.metadata['_HyperSpy']['Folding']['original_axes_manager']
                 original_shape = self.metadata['_HyperSpy']['Folding']['original_shape']
@@ -503,15 +673,6 @@ class GUI(customtkinter.CTk):
 
                 save_changes()
                 try:
-                    # entry_signal_unfolded.delete(0, tk.END)
-                    # entry_signal_unfolded.insert(0, "None" if signal_unfolded is None else signal_unfolded)
-
-                    # entry_original_axes_manager.delete(0, tk.END)
-                    # entry_original_axes_manager.insert(0, "None" if original_axes_manager is None else original_axes_manager)
-
-                    # entry_original_shape.delete(0, tk.END)
-                    # entry_original_shape.insert(0, "None" if original_shape is None else original_shape)
-
                     self.entry_date.delete(0, tk.END)
                     self.entry_date.insert(0, "None" if date is None else date)
 
@@ -520,36 +681,26 @@ class GUI(customtkinter.CTk):
 
 
 
-
-
-
-
-
-
-
-
+            ###########################################################################
+            #                               SURFACE METADATA GUI                      #
+            ###########################################################################
 
             metadata_label = tk.Label(self.metadata_window, text="Metadaten der Surfaces-Datei:",
                                             font=("Arial", 14, "bold"))
             metadata_label.grid(row=0, column=1)
-
 
             hyperspy_label = tk.Label(self.metadata_window, text="HyperSpy:", font=("Arial", 14, "bold"), anchor="w")
             hyperspy_label.grid(row=1, column=0, sticky="w")
 
             original_axes_manager_label = tk.Label(self.metadata_window, text="original_axes_manager:", font=("Arial", 14))
             original_axes_manager_label.grid(row=2, column=0, sticky="w")
-            #original_axes_manager_label.config(text=f"original_axes_manager:")
             original_axes_manager_value = tk.Label(self.metadata_window, text="None" if original_axes_manager is None else str(original_axes_manager), font=("Arial", 14))
             original_axes_manager_value.grid(row=2, column=1, padx=5, pady=2)
 
             original_shape_label = tk.Label(self.metadata_window, text="original_shape:", font=("Arial", 14))
             original_shape_label.grid(row=3, column=0, sticky="w")
-            #original_shape_label.config(text=f"original_shape:")
             original_shape_value = tk.Label(self.metadata_window, text="None" if original_shape is None else str(original_shape), font=("Arial", 14))
             original_shape_value.grid(row=3, column=1, padx=5, pady=2)
-            #entry_original_shape = tk.Entry(self.metadata_window)
-            #entry_original_shape.grid(row=3, column=1, padx=5, pady=5)
 
             signal_unfolded_label = tk.Label(self.metadata_window, text="signal_unfolded:", font=("Arial", 14))
             signal_unfolded_label.grid(row=4, column=0, sticky="w")
@@ -637,17 +788,22 @@ class GUI(customtkinter.CTk):
             self.entry_date = entry_date  # Save entry_date as an instance variable
             self.metadata = metadata  # Save metadata as an instance variable
             update_textboxes()
-            #save_changes()
 
         self.metadata_window.lift()
-    #self.metadata_window.protocol("WM_DELETE_WINDOW", close_metadata_window)
-    #self.metadata_window_open = True
+
 
 
     def close_metadata_window(self):
         self.metadata_window.destroy()
         self.metadata_window_open = False
 
+    """
+       Erstellt die JSON-Datei mit Metadaten für die hochgeladenen Dateien.
+       Die Metadaten werden aus verschiedenen "Quellen" abgerufen und strukturiert in das JSON-Format eingefügt.
+       Die JSON-Datei wird im aktuellen Verzeichnis als "daten.json" gespeichert.
+
+       @return: None
+       """
     def createJsonFile(self):
 
         title_tdms_file = self.tdmsMetadata.get("name", "N/A")
@@ -658,14 +814,22 @@ class GUI(customtkinter.CTk):
 
         global date_sur
         global signal_unfolded
+        global unfolded
         global original_axes_manager
+        global original_shape
+        global signal_type
+        global hyperspy_version
+        global io_plugin
+        global operation
+        global authors
+        global original_filename
+        global time
+        global title_meta
 
         datum_value = self.datum_field.get()
 
         if datum_value == "":
             datum_value = self.get_current_date()
-
-        # hochgeladene_tdms_dateien = ['/Users/muhamedjaber/PycharmProjects/APIv1/03_Kaltgas_316L-Al_07_vf_4000.tdms', '/Users/muhamedjaber/PycharmProjects/APIv1/03_Kaltgas_316L-Al_10_vf_4600.tdms']
 
         data = {
             'Title': self.titleText_field.get(),
@@ -674,10 +838,9 @@ class GUI(customtkinter.CTk):
             'Datum': datum_value,
         }
 
-        # Verwende die Liste hochgeladene_tdms_dateien, um die Pfade der hochgeladenen TDMS-Dateien zu durchlaufen
+        # Verwende die Liste hochgeladene_metadaten_dateien, um die Pfade der hochgeladenen TDMS-Dateien zu durchlaufen
         for index, metadata_datei in enumerate(self.uploaded_file_names):
             if metadata_datei.lower().endswith(".tdms"):
-                # sorted(self.uploaded_file_names, key=lambda x: (not x.lower().endswith('.tdms'), x))
                 abschnitt_name = os.path.basename(metadata_datei)
                 abschnitt_daten = {
                     'Ersteller/in (ID: 2)': os.getlogin(),
@@ -701,13 +864,9 @@ class GUI(customtkinter.CTk):
                 data[abschnitt_name] = abschnitt_daten
             else:
                 if metadata_datei.lower().endswith(".sur"):
-                    # s = hs.load(metadata_datei)
-                    # metadata = s.metadata.as_dictionary()
-                    # date_sur = metadata['General']['date']
 
                     if metadata_datei in sur_dates:
                         date_sur = sur_dates[metadata_datei]
-                        # signal_unfolded = sur_dates[metadata_datei]
 
                     else:
                         s = hs.load(metadata_datei)
@@ -740,19 +899,18 @@ class GUI(customtkinter.CTk):
                         'Förderkennzeichen (ID: 19)': self.förderkennzeichen_field.get(),  # Nutzereingabe
                         'Zusätzliche Informationen': {
                             'original_axes_manager': original_axes_manager,
-                            # 'original_shape': original_shape,
+                            'original_shape': original_shape,
                             'signal_unfolded': signal_unfolded,
-                            # 'unfolded': unfolded,
-                            # 'signal_type': signal_type,
-                            # 'hyperspy_version': hyperspy_version,
-                            # 'io_plugin': io_plugin,
-                            # 'operation': operation,
-                            # 'authors': authors,
-                            # 'original_filename':original_filename,
-                            # 'time': time,
-                            # 'title': title_meta,
+                            'unfolded': unfolded,
+                            'signal_type': signal_type,
+                            'hyperspy_version': hyperspy_version,
+                            'io_plugin': io_plugin,
+                            'operation': operation,
+                            'authors': authors,
+                            'original_filename':original_filename,
+                            'time': time,
+                            'title': title_meta,
 
-                            # Weitere Einträge hier hinzufügen
                         },
                     }
                     data[abschnitt_name] = abschnitt_daten
@@ -760,15 +918,16 @@ class GUI(customtkinter.CTk):
         with open('daten.json', 'w') as json_datei:
             json.dump(data, json_datei, indent=4)
 
-        # Dateiname und Pfad für die JSON-Datei
-        # filename = 'daten.json'
-        # filepath = filename
+    """
+      Lädt die JSON-Datei "daten.json" zu dem Experiment hinzu.
 
-        # with open(filepath, 'w') as outfile:
-        #    json.dump(data, outfile)
+      Diese Funktion überprüft, ob die JSON-Datei "daten.json" im aktuellen Verzeichnis vorhanden ist.
+      Falls ja, dann wird sie zu dem angegebenen Experiment mit der angegebenen ID hochgeladen.
+      Andernfalls wird eine entsprechende Fehlermeldung ausgegeben.
 
-        # print(f"Die Datei {filename} wurde erfolgreich erstellt!")
-
+      @param exp_id: Die ID des Experiments, zu dem die JSON-Datei hochgeladen werden soll.
+      @return: None
+      """
     def uploadJsonFile(self, exp_id):
         daten_json_path = 'daten.json'
         if os.path.exists(daten_json_path):
@@ -780,8 +939,17 @@ class GUI(customtkinter.CTk):
             print(f"File '{daten_json_path}' does not exist.")
 
 
-    # create Experiment
+    """
+       Erstellt ein neues Experiment und lädt Dateien sowie Metadaten hoch.
 
+       @param title: Der Titel des Experiments.
+       @param tag: Die Tags für das Experiment (kommagetrennt).
+       @param allgemein: Allgemeine Informationen zum Experiment.
+       @param rechte: Rechteinformationen für das Experiment.
+       @param förderkennzeichen: Das Förderkennzeichen für das Experiment.
+       @param datum: Das Datum des Experiments.
+       @return: None
+       """
     def create_Experiment(self, title, tag, allgemein, rechte, förderkennzeichen, datum):
 
         response = manager.create_experiment()
@@ -807,7 +975,7 @@ class GUI(customtkinter.CTk):
         exp_id = response['id']
         self.uploadJsonFile(exp_id)
 
-        # upload the selected files to the experiment
+        # Lädt die ausgewählte Datei zum Experiment hoch
         print(self.uploaded_file_names)
         for attached_files in self.uploaded_file_names:
             if not attached_files.lower().endswith(".tdms") and not attached_files.lower().endswith(".sur"):
@@ -819,37 +987,17 @@ class GUI(customtkinter.CTk):
 
     try:
 
-    # uses the json.dumps function to convert the exp variable (which contains information about an experiment)
-    # into a string representation in JSON format. The indent parameter is set to 4 to make the JSON output more
-    # readable, and the sort_keys parameter is set to True to sort the keys in the JSON output.
-    # print(json.dumps(exp, indent=4, sort_keys=True))
-
-    # Create a database item
-    # 1 stands for the ID of the category of the new item
-    # If you manually display the bar next to "create" in the database, you will see all categories
-    #response = manager.create_item(1)
-    #print(f"Created database item with id {response['id']}.")
-
-
-    # link database item 3449 to experiment 13296
-    #params = {"link": 3449, "targetEntity": "items"}
-    #print(manager.add_link_to_experiment(13296, params))
-
-    #root.mainloop()
-
-
-
         def change_appearance_mode_event(self, new_appearance_mode: str):
             customtkinter.set_appearance_mode(new_appearance_mode)
 
 
         def sidebar_create_event(self):
 
-
             self.uploaded_file_names.clear()
-            hochgeladene_tdms_dateien.clear()
+            hochgeladene_metadaten_dateien.clear()
             print("sidebar_button Create click")
-            # Unhide Create GUI Objects (after hiding everything else first)
+
+            # Unhide Create GUI Objects (nachdem zuerst alles andere ausgeblendet wurde)
             self.hide_all_labels()
             self.headline_label.grid(row=0, column=1, padx=10, pady=(20, 200), sticky="WesN")
             self.titleText_field.grid(row=0, column=1, padx=(0, 200), pady=(0, 60))
@@ -862,99 +1010,7 @@ class GUI(customtkinter.CTk):
             self.selected_files_button.grid(row=1, column=1, padx=(175, 0), pady=(10, 10))
             self.myButton.grid(row=4, column=1, padx=(20, 20), pady=(10, 20), sticky="es")
 
-            #self.label = customtkinter.CTkLabel(self, text="Create")
-            #self.label.grid(row=0, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
 
-
-
-
-
-
-
-
-
-
-
-
-            #CTkSegmentedButton
-
-
-
-
-
-
-
-
-
-
-            def upload_tdms_file():
-                # Durch das Hinzufügen der Zeile global hochgeladene_tdms_dateien wird die Variable als global
-                # markiert und alle Änderungen, die in der Funktion vorgenommen werden, wirken
-                # sich auf die globale Variable aus.
-
-                # filedialog ist ein Modul in Tkinter, das Funktionen für den Dateiauswahldialog bereitstellt.
-                # askopenfilename() ist eine Funktion des filedialog-Moduls. Sie öffnet den Dateiauswahldialog und
-                # gibt den ausgewählten Dateipfad zurück. Der Benutzer kann eine Datei auswählen und den Dialog schließen.
-                # Der filetypes Parameter wird verwendet, um die Dateitypen festzulegen, die im
-                # Dateiauswahldialog angezeigt werden sollen. In diesem Fall ist es eine Liste mit einem einzelnen
-                # Tuple: ("TDMS files", "*.tdms").
-                # Das Tuple enthält zwei Werte: der erste Wert ist eine Beschreibung des
-                # Dateityps ("TDMS files") und der zweite Wert ist ein Muster, das angibt, welche Dateien angezeigt werden
-                # sollen ("*.tdms" für TDMS-Dateien). Der Dateityp wird im Dateiauswahldialog angezeigt und hilft dem Benutzer,
-                # die gewünschte Datei zu finden.
-                # Die filepath Variable speichert den ausgewählten Dateipfad, der vom Dateiauswahldialog zurückgegeben wird.
-                # Nachdem der Benutzer eine Datei ausgewählt und den Dialog geschlossen hat, enthält filepath den Pfad zur
-                # ausgewählten TDMS-Datei.
-
-                #global hochgeladene_tdms_dateien
-
-                tdms_Label = customtkinter.CTkLabel(self)
-                tdms_Label.grid(row=3, column=1, padx=10, pady=(0, 10))
-                file_paths = filedialog.askopenfilenames(filetypes=[("TDMS files", "*.tdms")])
-
-                if file_paths:
-                     #hochgeladene_tdms_dateien.clear()  # Leere die Liste vor dem Hinzufügen der neuen Pfade
-
-                    for filepath in file_paths:
-                        self.tdmsMetadata = td.read_metadata(filepath).properties
-                        print(file_paths)
-                        print("Metadaten der TDMS-Datei:")
-                        print("-----------------------------")
-                        for key, value in self.tdmsMetadata.items():
-                            print(f"{key}: {value}")
-
-                        tdms_Label.configure(text="Metadata uploaded successfully.")
-                        hochgeladene_tdms_dateien.append(filepath)  # Füge den Pfad zur Liste hinzu
-
-
-                else:
-
-                    tdms_Label.configure(text="No file was selected.")
-
-            # Create an experiment
-
-
-                #file_paths = self.folderText_field.get().split(";")
-               # for file_path in file_paths:
-                #    with open(file_path, 'rb') as f:
-                 #       params = {'file': f}
-                  #      manager.upload_to_experiment(exp_id, params)
-                   #     print(f"Uploaded file '{file_path}' to experiment {exp_id}.")
-
-
-
-
-
-
-            #myUploadButton = customtkinter.CTkButton(self, text="Add File", command=prepare_for_upload)
-            #myUploadButton.grid(row=1, column=1, padx=(0,0), pady=(10, 10))
-
-
-
-
-
-            #metaDataButton = customtkinter.CTkButton(self, text="Add Metadata", command=upload_tdms_file)
-            #metaDataButton.grid(row=3, column=1, padx=(20, 20), pady=(10, 10), sticky= "e")
 
         def hide_all_labels(self):
             # Edit Elements
@@ -964,8 +1020,7 @@ class GUI(customtkinter.CTk):
             self.title_entry.grid_forget()
             self.upload_button_edit.grid_forget()
             self.edit_exp_button.grid_forget()
-
-            #self.create_label.pack_forget()
+            self.link_button.grid_forget()
 
             # Create Elements
             self.headline_label.grid_forget()
@@ -980,49 +1035,36 @@ class GUI(customtkinter.CTk):
             self.myButton.grid_forget()
             self.myLabel.grid_forget()
 
-
-
-
-
+            # Menu Elements
+            self.user_guide_title.grid_forget()
+            self.frame.grid_forget()
+            self.frame_label.grid_forget()
 
 
         def sidebar_edit_event(self):
-            self.hide_all_labels()
+                self.hide_all_labels()
+                self.uploaded_file_names.clear()
 
-            #self.experiment_id_label = tk.Label(self, text="Experiment ID:")
-            #self.experiment_id_label.grid_forget()
-            self.experiment_id_label.grid(row=0, column=1, padx=10, pady=(20, 10), sticky="wesn")
-            self.experiment_id_entry.grid(row=1, column=1, padx=10, pady=(20, 0))
-            self.tag_entry.grid(row=2, column=1, padx=10, pady=(10,20))
-            self.title_entry.grid(row=3, column=1, padx=10, pady=(5,20))
-            self.upload_button_edit.grid(row=4, column=1, padx=10, pady=20)
-            self.edit_exp_button.grid(row=5, column=1, padx=(20, 20), pady=(10, 20), sticky="es")
-
-
-
-            print("sidebar_button click")
-            #self.label = customtkinter.CTkLabel(self, text="")
-            #self.label.grid(row=0, column=1, padx=(20, 0), pady=(20, 0), sticky="nsew")
+                self.experiment_id_label.grid(row=0, column=1, padx=10, pady=(40, 0), sticky="wesn")
+                self.experiment_id_entry.grid(row=1, column=1, padx=10, pady=(0, 80))
+                self.tag_entry.grid(row=1, column=1, padx=10, pady=(120, 80))
+                self.title_entry.grid(row=1, column=1, padx=10, pady=(200, 40))
+                self.upload_button_edit.grid(row=4, column=1, padx=10, pady=20)
+                self.selected_files_button.grid(row=4, column=1, padx=(185,10), pady=20)
+                self.link_button.grid(row=5, column=1, padx=10, pady=20)
+                self.edit_exp_button.grid(row=5, column=1, padx=(20, 20), pady=(10, 20), sticky="es")
 
 
-
-
-            # Eingabefeld für Experiment-ID
-
-
-
-
-
-
-
-            # Button zum Hochladen einer Datei
-
-
-            print("End")
-
-
+                print("sidebar_button click")
 
         def sidebar_menu_event(self):
+            self.hide_all_labels()
+            self.user_guide_title.grid(row=0, column=1, sticky="wesn")
+
+            self.user_guide_title.grid(row=0, column=1, sticky="wesn")
+            self.frame.grid(row=1, column=1, padx=(10, 10))
+            self.frame_label.grid(row=0, column=0, sticky="wesn", padx=(5, 5))
+
             print("sidebar_button click")
 
 
