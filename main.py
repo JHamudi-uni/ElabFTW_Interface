@@ -17,9 +17,9 @@ from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 
 # SSL ZERTIFIKAT
-os.environ["REQUESTS_CA_BUNDLE"] = 'c:\schoe\python\elabftw\elabftw.pem'
-os.environ["SSL_CERT_FILE"] = 'c:\schoe\python\elabftw\elabftw.pem'
-ssl.match_hostname = lambda cert, hostname: True
+#os.environ["REQUESTS_CA_BUNDLE"] = 'c:\schoe\python\elabftw\elabftw.pem'
+#os.environ["SSL_CERT_FILE"] = 'c:\schoe\python\elabftw\elabftw.pem'
+#ssl.match_hostname = lambda cert, hostname: True
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
@@ -43,7 +43,6 @@ token: In die .env Datei schreiben
 """
 
 manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token=token)
-
 
 # GLOBALE VARIABLEN
 
@@ -218,6 +217,9 @@ class GUI(customtkinter.CTk):
         self.link_button = customtkinter.CTkButton(self, text="Link Database", command=self.open_link_window)
         self.link_button.grid_forget()
 
+        self.myLabel_edit = customtkinter.CTkLabel(self)
+        self.myLabel_edit.grid_forget()
+
 
 
         ###########################################################################
@@ -346,12 +348,16 @@ class GUI(customtkinter.CTk):
         @return: None
         """
     def upload_file_edit(self):
+        self.myLabel_edit = customtkinter.CTkLabel(self, text="Successfully Edited",
+                                                   font=customtkinter.CTkFont(size=13))
+        self.myLabel_edit.grid(row=5, column=1, padx=10, pady=10)
         experiment_id_edit = self.experiment_id_entry.get()
         tag_id_edit = self.tag_entry.get()
         title_id_edit = self.title_entry.get()
 
         # Lädt die ausgewählten Dateien zum Experiment
         print(self.uploaded_file_names)
+
         for attached_files in self.uploaded_file_names:
             if not attached_files.lower().endswith(".tdms") and not attached_files.lower().endswith(".sur"):
                 with open(attached_files, 'rb') as file:
@@ -374,6 +380,7 @@ class GUI(customtkinter.CTk):
         print(manager.post_experiment(experiment_id_edit, params_body))
         print(manager.post_experiment(experiment_id_edit, params_update))
         print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
+
 
 
 
@@ -938,6 +945,16 @@ class GUI(customtkinter.CTk):
         else:
             print(f"File '{daten_json_path}' does not exist.")
 
+    """
+        Wird am anfang der create_Experiment Funktion aufgerufen.
+        Soll verhindern, dass wenn man zweimal hintereinander die create_Experiment funktion aufruft, das
+        self.myLabel nicht auf dem Fenster bleibt und beim wechseln der Fenster weiterhin angezeigt wird.
+        
+        @return: None 
+    
+        """
+    def hide_experiment_id_label(self):
+        self.myLabel.grid_forget()
 
     """
        Erstellt ein neues Experiment und lädt Dateien sowie Metadaten hoch.
@@ -951,11 +968,12 @@ class GUI(customtkinter.CTk):
        @return: None
        """
     def create_Experiment(self, title, tag, allgemein, rechte, förderkennzeichen, datum):
-
+        self.hide_experiment_id_label()
         response = manager.create_experiment()
         print(f"Created experiment with id {response['id']}")
         self.myLabel = customtkinter.CTkLabel(self, text=f"Created experiment with id {response['id']}.")
         self.myLabel.grid(row=4, column=1, padx=5, pady=(0, 10))
+        #self.after(15000, self.hide_experiment_id_label)
 
         params = {"title": title,
                   "allgemein": allgemein,
@@ -983,6 +1001,9 @@ class GUI(customtkinter.CTk):
                     params = {'file': f}
                     manager.upload_to_experiment(exp_id, params)
                     print(f"Uploaded file '{attached_files}' to experiment {exp_id}.")
+
+        self.uploaded_file_names.clear()
+
 
 
     try:
@@ -1021,6 +1042,7 @@ class GUI(customtkinter.CTk):
             self.upload_button_edit.grid_forget()
             self.edit_exp_button.grid_forget()
             self.link_button.grid_forget()
+            self.myLabel_edit.grid_forget()
 
             # Create Elements
             self.headline_label.grid_forget()
@@ -1051,7 +1073,7 @@ class GUI(customtkinter.CTk):
                 self.title_entry.grid(row=1, column=1, padx=10, pady=(200, 40))
                 self.upload_button_edit.grid(row=4, column=1, padx=10, pady=20)
                 self.selected_files_button.grid(row=4, column=1, padx=(185,10), pady=20)
-                self.link_button.grid(row=5, column=1, padx=10, pady=20)
+                self.link_button.grid(row=4, column=1, padx=(10,360), pady=20)
                 self.edit_exp_button.grid(row=5, column=1, padx=(20, 20), pady=(10, 20), sticky="es")
 
 
