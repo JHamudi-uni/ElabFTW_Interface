@@ -107,7 +107,7 @@ class GUI(customtkinter.CTk):
         Behörden angegeben werden, die die Forschung finanziert haben.
         4. Rechte: Wahl der Rechte für das geistige Eigentum an den Daten erwartet. 
         z.B.: 'CC-BY'(BY Attribution), 'CC-0'(Daten) & 'CC Version 4.0'(schriftliche Dokumente).
-        5. Allgemein: Feld für allgemeine Angaben, die in der JSON-Datei gespeichert werden.
+        5. Kommentar: Feld für allgemeine Angaben, die in der JSON-Datei gespeichert werden.
         6. Datum: Standardmäßig wird das heutige Datum verwendet. 
         Anderes Datum eingeben oder das Feld leer lassen.
         7. Upload File: Wählen Sie eine Datei aus, die hochgeladen werden soll. 
@@ -248,8 +248,8 @@ class GUI(customtkinter.CTk):
         self.tagText_field = customtkinter.CTkEntry(self, placeholder_text="Tags")
         self.tagText_field.grid_forget()
 
-        self.allgemeinText_field = customtkinter.CTkEntry(self, placeholder_text="Allgemein")
-        self.allgemeinText_field.grid_forget()
+        self.kommentarText_field = customtkinter.CTkEntry(self, placeholder_text="Kommentar")
+        self.kommentarText_field.grid_forget()
 
         self.rechteText_field = customtkinter.CTkEntry(self, placeholder_text="Rechte")
         self.rechteText_field.grid_forget()
@@ -269,7 +269,7 @@ class GUI(customtkinter.CTk):
         self.myButton = customtkinter.CTkButton(self, text="Create Experiment",
                                            command=lambda: self.create_Experiment(self.titleText_field.get(),
                                                                              self.tagText_field.get(),
-                                                                             self.allgemeinText_field.get(),
+                                                                             self.kommentarText_field.get(),
                                                                              self.rechteText_field.get(),
                                                                              self.förderkennzeichen_field.get(),
                                                                              self.datum_field.get()))
@@ -447,10 +447,10 @@ class GUI(customtkinter.CTk):
         print(manager.post_experiment(experiment_id_edit, params_body))
         print(manager.post_experiment(experiment_id_edit, params_update))
 
-        #kfile = self.get_uploaded_files_for_experiment(experiment_id_edit)
-        #print("kfile:")
-        #print(kfile)
-        #print("----")
+        kfile = self.get_uploaded_files_for_experiment(experiment_id_edit)
+        print("kfile:")
+        print(kfile)
+        print("----")
 
         self.createJsonFile()
         self.uploadJsonFile(experiment_id_edit)
@@ -507,6 +507,13 @@ class GUI(customtkinter.CTk):
 
 
         for filepath in file_paths:
+            filename = os.path.basename(filepath)
+            filename_without_bracket = filename.replace('[', '').replace(']', '')
+
+            if filename != filename_without_bracket:
+                new_filepath = os.path.join(os.path.dirname(filepath), filename_without_bracket)
+                os.rename(filepath, new_filepath)
+                filepath = new_filepath  # Update the filepath to the new name
 
             if filepath.lower().endswith(".tdms"):
                 if filepath in hochgeladene_metadaten_dateien:
@@ -575,7 +582,7 @@ class GUI(customtkinter.CTk):
         self.value2_window = tk.Toplevel(self)
         self.open_windows.append(self.value2_window)
         self.value2_window.title("Selected Files")
-        self.center_window(self.value2_window, 725, 400)
+        self.center_window(self.value2_window, 755, 400)
 
 
         self.current_window = self.value2_window  # Setze das aktuelle Fenster auf das neue Fenster
@@ -726,6 +733,8 @@ class GUI(customtkinter.CTk):
 
             def save_changes():
 
+                self.saveLabel.grid(row=17, column=1, padx=10, pady=20, sticky="w")
+
                 try:
                     global date_sur
                     global signal_unfolded
@@ -745,7 +754,11 @@ class GUI(customtkinter.CTk):
                     self.entry_date.insert(0,
                                            "None" if sur_dates.get(filepath) is None else sur_dates[filepath])
 
+
+
+
                     print("Changes saved successfully")
+
 
                 except Exception as e:
                     print("An error occurred while saving changes:", str(e))
@@ -778,7 +791,8 @@ class GUI(customtkinter.CTk):
                 # Signal
                 signal_type = self.metadata['Signal']['signal_type']
 
-                save_changes()
+                #save_changes()
+
                 try:
                     self.entry_date.delete(0, tk.END)
                     self.entry_date.insert(0, "None" if date is None else date)
@@ -894,6 +908,9 @@ class GUI(customtkinter.CTk):
             button_save.grid(row=17, column=1, pady=(20, 20), sticky = "se")
             self.entry_date = entry_date  # Save entry_date as an instance variable
             self.metadata = metadata  # Save metadata as an instance variable
+            self.saveLabel = customtkinter.CTkLabel(self.metadata_window, text="Successfully saved",
+                                                    font=customtkinter.CTkFont(size=13))
+
             update_textboxes()
 
         self.metadata_window.lift()
@@ -955,13 +972,32 @@ class GUI(customtkinter.CTk):
         data = {
             'Title': title_value or title_id_edit,
             'Tags': tags_value or tag_id_edit,
-            'Allgemein': self.allgemeinText_field.get(),
+            'Kommentar': self.kommentarText_field.get(),
             'Datum': datum_value,
         }
+        print("Meta:")
+        print(self.uploaded_file_names)
 
         # Verwende die Liste hochgeladene_metadaten_dateien, um die Pfade der hochgeladenen TDMS-Dateien zu durchlaufen
         for index, metadata_datei in enumerate(self.uploaded_file_names):
             if metadata_datei.lower().endswith(".tdms"):
+
+                metadata = td.read_metadata(metadata_datei).properties
+                tdms_name = metadata.get("name", "N/A")
+                tdms_description = metadata.get("description", "N/A")
+                tdms_titel = metadata.get("title", "N/A")
+                tdms_author = metadata.get("author", "N/A")
+                tdms_Copyright = metadata.get("Copyright", "N/A")
+                tdms_FileVersion = metadata.get("FileVersion", "N/A")
+                tdms_Programmversion = metadata.get("Programmversion", "N/A")
+                tdms_MeasuringHardware = metadata.get("MeasuringHardware", "N/A")
+                tdms_MeasuringDriver = metadata.get("MeasuringDriver", "N/A")
+                tdms_Legierung = metadata.get("Legierung", "N/A")
+                tdms_Project = metadata.get("Project", "N/A")
+                tdms_Material = metadata.get("Material", "N/A")
+                tdms_KSS = metadata.get("KSS", "N/A")
+
+
                 abschnitt_name = os.path.basename(metadata_datei)
                 abschnitt_daten = {
                     'Ersteller/in (ID: 2)': os.getlogin(),
@@ -973,6 +1009,24 @@ class GUI(customtkinter.CTk):
                     'Description (ID: 17)': formatted_remark,
                     'GeoLocation (ID: 18)': 'Bremen, Germany',
                     'Förderkennzeichen (ID: 19)': self.förderkennzeichen_field.get(),  # Nutzereingabe
+                    'Zusätzliche Informationen': {
+                        'name': tdms_name,
+                        'description': tdms_description,
+                        'title':tdms_titel,
+                        'author':tdms_author,
+                        'Copyright': tdms_Copyright,
+                        'FileVersion': tdms_FileVersion,
+                        'Programmversion': tdms_Programmversion,
+                        'MeasuringHardware': tdms_MeasuringHardware,
+                        'MeasuringDriver': tdms_MeasuringDriver,
+                        'Legierung': tdms_Legierung,
+                        'Project': tdms_Project,
+                        'Material': tdms_Material,
+                        'KSS': tdms_KSS,
+
+
+
+                    },
                     # 'Folder (ID: 1)': '',
                     # 'Software': 'VNWA3',
                     # 'Software Version': 'VNWA36.6 (2015)',
@@ -1079,13 +1133,13 @@ class GUI(customtkinter.CTk):
 
        @param title: Der Titel des Experiments.
        @param tag: Die Tags für das Experiment (kommagetrennt).
-       @param allgemein: Allgemeine Informationen zum Experiment.
+       @param kommentar: Kommentar Informationen zum Experiment.
        @param rechte: Rechteinformationen für das Experiment.
        @param förderkennzeichen: Das Förderkennzeichen für das Experiment.
        @param datum: Das Datum des Experiments.
        @return: None
        """
-    def create_Experiment(self, title, tag, allgemein, rechte, förderkennzeichen, datum):
+    def create_Experiment(self, title, tag, kommentar, rechte, förderkennzeichen, datum):
         global edit_json
         edit_json = False
         self.hide_experiment_id_label()
@@ -1098,7 +1152,7 @@ class GUI(customtkinter.CTk):
         #self.after(15000, self.hide_experiment_id_label)
 
         params = {"title": title,
-                  "allgemein": allgemein,
+                  "kommentar": kommentar,
                   "förderkennzeichen": förderkennzeichen,
                   "datum": datum,
                   "rechte": rechte}
@@ -1118,11 +1172,11 @@ class GUI(customtkinter.CTk):
         # Lädt die ausgewählte Datei zum Experiment hoch
         print(self.uploaded_file_names)
         for attached_files in self.uploaded_file_names:
-            if not attached_files.lower().endswith(".tdms") and not attached_files.lower().endswith(".sur"):
-                with open(attached_files, 'rb') as f:
-                    params = {'file': f}
-                    manager.upload_to_experiment(exp_id, params)
-                    print(f"Uploaded file '{attached_files}' to experiment {exp_id}.")
+            #if not attached_files.lower().endswith(".tdms") and not attached_files.lower().endswith(".sur"):
+            with open(attached_files, 'rb') as f:
+                params = {'file': f}
+                manager.upload_to_experiment(exp_id, params)
+                print(f"Uploaded file '{attached_files}' to experiment {exp_id}.")
 
         self.uploaded_file_names.clear()
 
@@ -1145,7 +1199,7 @@ class GUI(customtkinter.CTk):
             self.headline_label.grid(row=0, column=1, padx=10, pady=(20, 200), sticky="WesN")
             self.titleText_field.grid(row=0, column=1, padx=(0, 200), pady=(0, 60))
             self.tagText_field.grid(row=0, column=1, padx=(0, 200), pady=(90, 50))
-            self.allgemeinText_field.grid(row=0, column=1, padx=(200, 0), pady=(90, 50))
+            self.kommentarText_field.grid(row=0, column=1, padx=(200, 0), pady=(90, 50))
             self.rechteText_field.grid(row=0, column=1, padx=(200, 0), pady=(0, 60))
             self.förderkennzeichen_field.grid(row=0, column=1, padx=(0, 200), pady=(200, 60))
             self.datum_field.grid(row=0, column=1, padx=(200, 0), pady=(200, 60))
@@ -1171,7 +1225,7 @@ class GUI(customtkinter.CTk):
             self.headline_label.grid_forget()
             self.titleText_field.grid_forget()
             self.tagText_field.grid_forget()
-            self.allgemeinText_field.grid_forget()
+            self.kommentarText_field.grid_forget()
             self.rechteText_field.grid_forget()
             self.förderkennzeichen_field.grid_forget()
             self.datum_field.grid_forget()
