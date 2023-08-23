@@ -10,7 +10,7 @@ import tkinter as tk
 import ssl
 
 from tkinter import *
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext
 from tkinter import Toplevel, Label
 from nptdms import TdmsFile as td
 from requests.exceptions import HTTPError
@@ -45,7 +45,7 @@ token: In die .env Datei schreiben
 manager = elabapy.Manager(endpoint="https://demo.elabftw.net/api/v1/", token=token)
 
 # GLOBALE VARIABLEN
-
+body_content = ""
 date_sur = None
 signal_unfolded = None
 original_shape = None
@@ -59,9 +59,16 @@ authors = None
 original_filename = None
 time = None
 title_meta = None
+title_id_edit = None
+tag_id_edit = None
+edit_json = False
+
+
 
 hochgeladene_metadaten_dateien = []
 sur_dates = {}
+liste_daten_json = []
+edit_json_data = {" "}
 
 
 # class App erbt von customkinter.CTk
@@ -93,30 +100,32 @@ class GUI(customtkinter.CTk):
     eLabFTW (Create) und das Bearbeiten eines bestehenden Experiments (Edit).
     
     Create Experiment:
-        1. Title: Geben Sie den Titel Ihres Experiments ein.
-        2. Tags: Fügen Sie Tags hinzu, mehrere Tags sind möglich 
-        (trennen Sie sie mit einem Komma, z. B.: tag1, tag2, usw.).
-        3. Förderkennzeichen: Hier können Sie Organisationen oder 
-        Behörden angeben, die Ihre Forschung finanziert haben.
-        4. Rechte: Wählen Sie die entsprechenden Rechte für das geistige Eigentum 
-        an den Daten aus. Empfohlen werden die Lizenzen 'CC-BY' (BY Attribution) 
-        oder 'CC-0' für Daten und 'CC Version 4.0' für schriftliche Dokumente.
+        1. Title: Erwartet Eingabe von Titel des Experiments.
+        2. Tags: Erwartet Tags des Experiments, mehrere Tags sind möglich 
+        (Tags mit einem Komma trennen, z.B.: tag1, tag2, usw.).
+        3. Förderkennzeichen: Hier können  Organisationen oder 
+        Behörden angegeben werden, die die Forschung finanziert haben.
+        4. Rechte: Wahl der Rechte für das geistige Eigentum an den Daten erwartet. 
+        z.B.: 'CC-BY'(BY Attribution), 'CC-0'(Daten) & 'CC Version 4.0'(schriftliche Dokumente).
         5. Allgemein: Feld für allgemeine Angaben, die in der JSON-Datei gespeichert werden.
         6. Datum: Standardmäßig wird das heutige Datum verwendet. 
-        Sie können ein anderes Datum eingeben oder das Feld leer lassen.
+        Anderes Datum eingeben oder das Feld leer lassen.
         7. Upload File: Wählen Sie eine Datei aus, die hochgeladen werden soll. 
         Unter "..." werden alle ausgewählten Dateien strukturiert angezeigt. 
         Einige Einträge können bearbeitet und durch Klicken auf "Speichern" bestätigt werden.
         8. Sobald alle erforderlichen Informationen eingegeben wurden, klicken Sie 
         auf "Create Experiment", um das Experiment in eLabFTW anzulegen.
-    Hinweis: Durch Klicken auf "Create" werden alle Felder & ausgewählten Dateien geleert. 
-    Bitte klicken Sie nur auf "Create", wenn Sie ein neues Experiment erstellen möchten.
+    Hinweis: Durch Klicken auf "Create" werden alle ausgewählten Dateien geleert. 
+    Bitte nur auf "Create" klicken, wenn ein neues Experiment erstellen werden soll.
             
     Experiment bearbeiten:
         1. Experiment-ID: Geben Sie die ID des Experiments ein, das Sie bearbeiten möchten.    
-        2. Add Tags: Hier können Sie zusätzliche Tags zum ausgewählten Experiment  
-        hinzufügen. Bestehende Tags werden beibehalten.
-        3. Change Title: Überschreiben Sie den aktuellen Titel des Experiments.
+        2. Add Tags: zusätzliche Tags hinzufügen, bestehende Tags werden beibehalten.
+        3. Change Title: aktuellen Titel des Experiments überschreiben
+        4. Link Database: erwartet die ID eines Database Items welches mit dem Experiment 
+        verlinkt werden soll
+        5. Add Body: Nach eingabe der Experiment ID kann der Inhalt der Textbox im ElabFtw 
+        verändert werden 
         """
 
 
@@ -174,11 +183,11 @@ class GUI(customtkinter.CTk):
 
 
     ###########################################################################
-    #                               MENU GUI                                  #
+    #                               HELP-MENU GUI                             #
     ###########################################################################
 
-        self.user_guide_label = customtkinter.CTkLabel(self, text=self.user_guide_text, justify="left", padx=10, pady=10)
-        self.user_guide_label.grid_forget()
+        #self.user_guide_label = customtkinter.CTkLabel(self, text=self.user_guide_text, justify="left", padx=10, pady=10)
+        #self.user_guide_label.grid_forget()
 
         self.user_guide_title = customtkinter.CTkLabel(self, text="Willkommen in der GUI-Benutzeranleitung:",
                                                        font=customtkinter.CTkFont(size=16, weight="bold"))
@@ -216,6 +225,9 @@ class GUI(customtkinter.CTk):
 
         self.link_button = customtkinter.CTkButton(self, text="Link Database", command=self.open_link_window)
         self.link_button.grid_forget()
+
+        self.body_button = customtkinter.CTkButton(self, text="Add Body", command=self.open_body_window)
+        self.body_button.grid_forget()
 
         self.myLabel_edit = customtkinter.CTkLabel(self)
         self.myLabel_edit.grid_forget()
@@ -270,17 +282,38 @@ class GUI(customtkinter.CTk):
 
 
     ###########################################################################
-    #                               MENU FUNKTIONEN                           #
+    #                               HELP-MENU FUNKTIONEN                      #
     ###########################################################################
 
 
-    # Menu Funktionen hier erstellen
+    # HELP-MENU Funktionen hier erstellen
 
 
 
     ###########################################################################
     #                               EDIT FUNKTIONEN                           #
     ###########################################################################
+
+    def get_uploaded_files_for_experiment(self, experiment_id):
+        experiment = manager.get_experiment(experiment_id)
+        print(experiment)
+        experiment_files = experiment.get('uploads', [])
+        print("Experiment files:")
+        print(experiment_files)
+        return experiment_files
+
+    def load_body_text(self):
+        global body_content
+        experiment_id_edit = self.experiment_id_entry.get()
+
+        # Hier rufst du den aktuellen Body-Inhalt des Experiments ab
+        experiment = manager.get_experiment(experiment_id_edit)
+        current_body_content = experiment.get('body', '')
+
+        # Setze den geladenen Textinhalt im GUI-Textfeld
+        self.body_text.delete("1.0", tk.END)  # Lösche den vorhandenen Text im Textfeld
+        self.body_text.insert("1.0", current_body_content)  # Füge den geladenen Textinhalt hinzu
+
 
         """
            Öffnet ein neues Fenster zur verlinkung von Database items mit einem Experiment.
@@ -320,6 +353,34 @@ class GUI(customtkinter.CTk):
                                                             command=lambda: self.link_to_database(self.link_window))
         self.database_link_button.grid(row=3, column=0, columnspan=2, pady=(10, 0))
 
+    def save_body_text(self):
+        global body_content
+        body_content = self.body_text.get("1.0", tk.END)  # Hole den gesamten Text
+        print("Saved body content:", body_content)
+        self.link_window.destroy()
+
+    def open_body_window(self):
+        if self.current_window:
+            self.current_window.destroy()
+        self.link_window = tk.Toplevel(self)
+        self.link_window.title("Add Body")
+        self.link_window.geometry("460x400")  # Größe des Fensters setzen
+
+        self.current_window = self.link_window  # Setze das aktuelle Fenster auf das neue Fenster
+        self.link_window.grab_set()
+
+        # Textfeld für langen Text
+        self.body_text = scrolledtext.ScrolledText(self.link_window, wrap=tk.WORD)
+        self.body_text.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")  # Oben mittig positionieren
+        self.link_window.grid_rowconfigure(0, weight=1)
+        self.link_window.grid_columnconfigure(0, weight=1)
+
+        # Lade den aktuellen Body-Inhalt aus dem Experiment und zeige ihn im Textfeld an
+        self.load_body_text()
+
+        # Button zum Speichern des Texts
+        save_button = customtkinter.CTkButton(self.link_window, text="Save", command=self.save_body_text)
+        save_button.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="s")
 
         """
         Verknüpft die ausgewählte Experiment-ID mit der Ziel-Datenbank-ID.
@@ -348,12 +409,20 @@ class GUI(customtkinter.CTk):
         @return: None
         """
     def upload_file_edit(self):
+        self.hide_experiment_id_label()
         self.myLabel_edit = customtkinter.CTkLabel(self, text="Successfully Edited",
                                                    font=customtkinter.CTkFont(size=13))
         self.myLabel_edit.grid(row=5, column=1, padx=10, pady=10)
         experiment_id_edit = self.experiment_id_entry.get()
+        global tag_id_edit
         tag_id_edit = self.tag_entry.get()
+        global title_id_edit
         title_id_edit = self.title_entry.get()
+        global liste_daten_json
+        global body_content
+        global edit_json
+        edit_json = True
+
 
         # Lädt die ausgewählten Dateien zum Experiment
         print(self.uploaded_file_names)
@@ -370,16 +439,46 @@ class GUI(customtkinter.CTk):
             for t in tags:
                 params_tag = {"tag": t.strip()}
                 print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
+
+
+
+        params_update = {"title": title_id_edit, "date": self.get_current_date(), "body": body_content}
+        params_body = {"bodyappend": "appended text<br>"}
+        print(manager.post_experiment(experiment_id_edit, params_body))
+        print(manager.post_experiment(experiment_id_edit, params_update))
+
+        #kfile = self.get_uploaded_files_for_experiment(experiment_id_edit)
+        #print("kfile:")
+        #print(kfile)
+        #print("----")
+
         self.createJsonFile()
         self.uploadJsonFile(experiment_id_edit)
 
+        # Überprüfen, ob eine JSON-Datei im Experiment vorhanden ist
+        experiment = manager.get_experiment(experiment_id_edit)
+        experiment_files = experiment.get('files', [])
+        json_files = [file for file in experiment_files if file['name'] == 'daten.json']
 
-        params_update = {"title": title_id_edit, "date": self.get_current_date(), "body": "New body content"}
-        params_body = {"bodyappend": "appended text<br>"}
+        if len(liste_daten_json) == 0:
+                #self.createJsonFile()
+                #self.uploadJsonFile(experiment_id_edit)
+                print(liste_daten_json)
 
-        print(manager.post_experiment(experiment_id_edit, params_body))
-        print(manager.post_experiment(experiment_id_edit, params_update))
-        print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
+
+        else:
+            print("end")
+            # Andernfalls lade die bestehende JSON-Datei, füge Daten hinzu oder ändere sie
+            #existing_json_file = json_files[0]  # Annahme: Es gibt nur eine JSON-Datei im Experiment
+            #existing_json_content = manager.get_experiment_file(experiment_id_edit, existing_json_file['id'])
+            # Hier kannst du die bestehende_json_content bearbeiten und anpassen
+            #updated_json_content = existing_json_content  # Beispiel: Keine Änderungen
+            # Dann die aktualisierte JSON-Datei hochladen
+            #self.uploadUpdatedJsonFile(experiment_id_edit, existing_json_file['id'], updated_json_content)
+
+
+        #print(manager.add_tag_to_experiment(experiment_id_edit, params_tag))
+
 
 
 
@@ -647,6 +746,7 @@ class GUI(customtkinter.CTk):
                                            "None" if sur_dates.get(filepath) is None else sur_dates[filepath])
 
                     print("Changes saved successfully")
+
                 except Exception as e:
                     print("An error occurred while saving changes:", str(e))
 
@@ -819,6 +919,8 @@ class GUI(customtkinter.CTk):
         remark_tdms_file = self.tdmsMetadata.get("Remark", "N/A")
         formatted_remark = remark_tdms_file.replace("\r\n", " ")
 
+        global tag_id_edit
+        global title_id_edit
         global date_sur
         global signal_unfolded
         global unfolded
@@ -838,9 +940,21 @@ class GUI(customtkinter.CTk):
         if datum_value == "":
             datum_value = self.get_current_date()
 
+        if edit_json:
+            title_value = self.titleText_field.get()
+            tags_value = self.tagText_field.get()
+            title_value = None
+            tags_value = None
+
+        else:
+            title_value = self.titleText_field.get()
+            tags_value = self.tagText_field.get()
+
+
+
         data = {
-            'Title': self.titleText_field.get(),
-            'Tags': self.tagText_field.get(),
+            'Title': title_value or title_id_edit,
+            'Tags': tags_value or tag_id_edit,
             'Allgemein': self.allgemeinText_field.get(),
             'Datum': datum_value,
         }
@@ -941,6 +1055,9 @@ class GUI(customtkinter.CTk):
             with open(daten_json_path, 'rb') as f:
                 params = {'file': f}
                 manager.upload_to_experiment(exp_id, params)
+                liste_daten_json.append(daten_json_path)
+                hochgeladene_metadaten_dateien.clear()
+                print(liste_daten_json)
                 print(f"Uploaded file '{daten_json_path}' to experiment {exp_id}.")
         else:
             print(f"File '{daten_json_path}' does not exist.")
@@ -955,6 +1072,7 @@ class GUI(customtkinter.CTk):
         """
     def hide_experiment_id_label(self):
         self.myLabel.grid_forget()
+        self.myLabel_edit.grid_forget()
 
     """
        Erstellt ein neues Experiment und lädt Dateien sowie Metadaten hoch.
@@ -968,7 +1086,11 @@ class GUI(customtkinter.CTk):
        @return: None
        """
     def create_Experiment(self, title, tag, allgemein, rechte, förderkennzeichen, datum):
+        global edit_json
+        edit_json = False
         self.hide_experiment_id_label()
+        global liste_daten_json
+        liste_daten_json.clear()
         response = manager.create_experiment()
         print(f"Created experiment with id {response['id']}")
         self.myLabel = customtkinter.CTkLabel(self, text=f"Created experiment with id {response['id']}.")
@@ -1043,6 +1165,7 @@ class GUI(customtkinter.CTk):
             self.edit_exp_button.grid_forget()
             self.link_button.grid_forget()
             self.myLabel_edit.grid_forget()
+            self.body_button.grid_forget()
 
             # Create Elements
             self.headline_label.grid_forget()
@@ -1057,7 +1180,7 @@ class GUI(customtkinter.CTk):
             self.myButton.grid_forget()
             self.myLabel.grid_forget()
 
-            # Menu Elements
+            # Help-Menu Elements
             self.user_guide_title.grid_forget()
             self.frame.grid_forget()
             self.frame_label.grid_forget()
@@ -1074,14 +1197,15 @@ class GUI(customtkinter.CTk):
                 self.upload_button_edit.grid(row=4, column=1, padx=10, pady=20)
                 self.selected_files_button.grid(row=4, column=1, padx=(185,10), pady=20)
                 self.link_button.grid(row=4, column=1, padx=(10,360), pady=20)
-                self.edit_exp_button.grid(row=5, column=1, padx=(20, 20), pady=(10, 20), sticky="es")
+                self.body_button.grid(row=4, column=1, padx=(20, 20), pady=(5, 4), sticky="e")
+                self.edit_exp_button.grid(row=5, column=1, padx=(20, 20), pady=(5, 20), sticky="es")
 
 
                 print("sidebar_button click")
 
         def sidebar_menu_event(self):
             self.hide_all_labels()
-            self.user_guide_title.grid(row=0, column=1, sticky="wesn")
+            #self.user_guide_title.grid(row=0, column=1, sticky="wesn")
 
             self.user_guide_title.grid(row=0, column=1, sticky="wesn")
             self.frame.grid(row=1, column=1, padx=(10, 10))
